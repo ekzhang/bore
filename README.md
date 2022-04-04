@@ -1,5 +1,8 @@
 # bore
 
+[![Build status](https://github.com/ekzhang/bore/workflows/ci/badge.svg)](https://github.com/ekzhang/bore/actions)
+[![Crates.io](https://img.shields.io/crates/v/bore-cli.svg)](https://crates.io/crates/bore-cli)
+
 A modern, simple TCP tunnel in Rust that exposes local ports to a remote server, bypassing standard NAT connection firewalls. **That's all it does: no more, and no less.**
 
 ```shell
