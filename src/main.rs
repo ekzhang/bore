@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bore_cli::server::Server;
+use bore_cli::{client::Client, server::Server};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -45,8 +45,8 @@ async fn main() -> Result<()> {
             to,
             port,
         } => {
-            let _ = (local_port, to, port);
-            todo!()
+            let client = Client::new(local_port, &to, port).await?;
+            client.listen().await?;
         }
         Command::Server { min_port } => {
             Server::new(min_port).listen().await?;
