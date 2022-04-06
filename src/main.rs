@@ -1,3 +1,5 @@
+use anyhow::Result;
+use bore_cli::server::Server;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -32,10 +34,24 @@ enum Command {
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
     let args = Args::parse();
+    match args.command {
+        Command::Local {
+            local_port,
+            to,
+            port,
+        } => {
+            let _ = (local_port, to, port);
+            todo!()
+        }
+        Command::Server { min_port } => {
+            Server::new(min_port).listen().await?;
+        }
+    }
 
-    println!("{:?}", args);
-
-    println!("bore cli running");
+    Ok(())
 }
