@@ -73,7 +73,11 @@ impl Server {
                     Ok(listener) => listener,
                     Err(_) => {
                         warn!(?port, "could not bind to local port");
-                        send_json(&mut stream, "port already in use").await?;
+                        send_json(
+                            &mut stream,
+                            ServerMessage::Error("port already in use".into()),
+                        )
+                        .await?;
                         return Ok(());
                     }
                 };
