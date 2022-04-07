@@ -13,7 +13,7 @@ pub const CONTROL_PORT: u16 = 7835;
 #[derive(Serialize, Deserialize)]
 pub enum ClientMessage {
     /// Initial client message specifying a port to forward.
-    Hello(u16),
+    Hello((u16, Option<String>)),
 
     /// Accepts an incoming TCP connection, using this stream as a proxy.
     Accept(Uuid),
@@ -33,6 +33,9 @@ pub enum ServerMessage {
 
     /// Indicates a server error that terminates the connection.
     Error(String),
+
+    /// Indicates a client error that terminates the connection.
+    ClientError(String),
 }
 
 /// Copy data mutually between two read/write streams.

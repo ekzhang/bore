@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::auth;
 use anyhow::{bail, Context, Result};
 use tokio::{io::BufReader, net::TcpStream};
 use tracing::{error, info, info_span, warn, Instrument};
@@ -26,14 +27,23 @@ pub struct Client {
 
 impl Client {
     /// Create a new client.
-    pub async fn new(local_port: u16, to: &str, port: u16) -> Result<Self> {
+    pub async fn new(local_port: u16, to: &str, port: u16, secret: Option<String>) -> Result<Self> {
         let stream = TcpStream::connect((to, CONTROL_PORT)).await?;
         let mut stream = BufReader::new(stream);
 
-        send_json(&mut stream, ClientMessage::Hello(port)).await?;
+        let secret = match secret {
+            Some(s) => match auth::encrypt_encode_secret(&s) {
+                Ok(s) => Some(s),
+                Err(e) => bail!("{e}"),
+            },
+            None => None,
+        };
+
+        send_json(&mut stream, ClientMessage::Hello((port, secret))).await?;
         let remote_port = match recv_json(&mut stream, &mut Vec::new()).await? {
             Some(ServerMessage::Hello(remote_port)) => remote_port,
             Some(ServerMessage::Error(message)) => bail!("server error: {message}"),
+            Some(ServerMessage::ClientError(message)) => bail!("client error: {message}"),
             Some(_) => bail!("unexpected initial non-hello message"),
             None => bail!("unexpected EOF"),
         };
@@ -77,6 +87,7 @@ impl Client {
                     );
                 }
                 Some(ServerMessage::Error(err)) => error!(%err, "server error"),
+                Some(ServerMessage::ClientError(err)) => error!(%err, "client error"),
                 None => return Ok(()),
             }
         }

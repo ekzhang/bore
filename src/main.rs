@@ -24,6 +24,10 @@ enum Command {
         /// Optional port on the remote server to select.
         #[clap(short, long, default_value_t = 0)]
         port: u16,
+
+        /// Optional secret. Must be 32 bytes or fewer.
+        #[clap(short, long)]
+        secret: Option<String>,
     },
 
     /// Runs the remote proxy server.
@@ -31,6 +35,10 @@ enum Command {
         /// Minimum TCP port number to accept.
         #[clap(long, default_value_t = 1024)]
         min_port: u16,
+
+        /// Optional secret. Must be 32 bytes or fewer.
+        #[clap(short, long)]
+        secret: Option<String>,
     },
 }
 
@@ -44,13 +52,15 @@ async fn main() -> Result<()> {
             local_port,
             to,
             port,
+            secret,
         } => {
-            let client = Client::new(local_port, &to, port).await?;
+            let client = Client::new(local_port, &to, port, secret).await?;
             client.listen().await?;
         }
-        Command::Server { min_port } => {
-            Server::new(min_port).listen().await?;
-        }
+        Command::Server { min_port, secret } => match secret {
+            None => Server::new(min_port).listen().await?,
+            Some(s) => Server::new_with_secret(min_port, &s)?.listen().await?,
+        },
     }
 
     Ok(())

@@ -12,12 +12,16 @@ use tokio::time::{sleep, timeout};
 use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
+use crate::auth;
 use crate::shared::{proxy, recv_json, send_json, ClientMessage, ServerMessage, CONTROL_PORT};
 
 /// State structure for the server.
 pub struct Server {
     /// The minimum TCP port that can be forwarded.
     min_port: u16,
+
+    /// Optional secret data to authenticate clients.
+    key: Option<auth::Key>,
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
@@ -29,7 +33,18 @@ impl Server {
         Server {
             min_port,
             conns: Arc::new(DashMap::new()),
+            key: None,
         }
+    }
+
+    /// Create a new server with a specified minimum port number an a secret.
+    pub fn new_with_secret(min_port: u16, secret: &str) -> Result<Self> {
+        let key = auth::key_from_sec(secret)?;
+        Ok(Server {
+            min_port,
+            conns: Arc::new(DashMap::new()),
+            key: Some(key),
+        })
     }
 
     /// Start the server, listening for new connections.
@@ -63,7 +78,12 @@ impl Server {
         let msg = recv_json(&mut stream, &mut buf).await?;
 
         match msg {
-            Some(ClientMessage::Hello(port)) => {
+            Some(ClientMessage::Hello((port, secret))) => {
+                if let Err(e) = self.authenticate(secret) {
+                    send_json(&mut stream, ServerMessage::ClientError(e.into())).await?;
+                    return Ok(());
+                }
+
                 if port != 0 && port < self.min_port {
                     warn!(?port, "client port number too low");
                     return Ok(());
@@ -123,6 +143,28 @@ impl Server {
                 warn!("unexpected EOF");
                 Ok(())
             }
+        }
+    }
+
+    fn authenticate(&self, secret: Option<String>) -> Result<(), &'static str> {
+        match (&self.key, secret) {
+            (Some(key), Some(cln_sec)) => {
+                if auth::secrets_match(&key, &cln_sec).is_err() {
+                    warn!("incorrect secret provided");
+                    Err("incorrect secret".into())
+                } else {
+                    Ok(())
+                }
+            }
+            (None, Some(_)) => {
+                warn!("secret provided but not configured on server");
+                Err("incorrect secret".into())
+            }
+            (Some(_), None) => {
+                warn!("no secret provided");
+                Err("secret is required".into())
+            }
+            (None, None) => Ok(()),
         }
     }
 }
