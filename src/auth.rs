@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use tokio::io::{AsyncBufRead, AsyncWrite};
 use uuid::Uuid;
 
-use crate::shared::{recv_json, send_json, ClientMessage, ServerMessage};
+use crate::shared::{recv_json_timeout, send_json, ClientMessage, ServerMessage};
 
 /// Wrapper around a MAC used for authenticating clients that have a secret.
 pub struct Authenticator(Hmac<Sha256>);
@@ -54,7 +54,7 @@ impl Authenticator {
     ) -> Result<()> {
         let challenge = Uuid::new_v4();
         send_json(stream, ServerMessage::Challenge(challenge)).await?;
-        match recv_json(stream, &mut Vec::new()).await? {
+        match recv_json_timeout(stream).await? {
             Some(ClientMessage::Authenticate(tag)) => {
                 ensure!(self.validate(&challenge, &tag), "invalid secret");
                 Ok(())
@@ -68,7 +68,7 @@ impl Authenticator {
         &self,
         stream: &mut (impl AsyncBufRead + AsyncWrite + Unpin),
     ) -> Result<()> {
-        let challenge = match recv_json(stream, &mut Vec::new()).await? {
+        let challenge = match recv_json_timeout(stream).await? {
             Some(ServerMessage::Challenge(challenge)) => challenge,
             _ => bail!("expected authentication challenge, but no secret was required"),
         };
