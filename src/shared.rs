@@ -49,10 +49,10 @@ where
 {
     let (mut s1_read, mut s1_write) = io::split(stream1);
     let (mut s2_read, mut s2_write) = io::split(stream2);
-    tokio::try_join!(
-        io::copy(&mut s1_read, &mut s2_write),
-        io::copy(&mut s2_read, &mut s1_write),
-    )?;
+    tokio::select! {
+        res = io::copy(&mut s1_read, &mut s2_write) => res,
+        res = io::copy(&mut s2_read, &mut s1_write) => res,
+    }?;
     Ok(())
 }
 

@@ -99,20 +99,20 @@ impl Client {
     }
 
     async fn handle_connection(&self, id: Uuid) -> Result<()> {
-        let local_conn = TcpStream::connect(("localhost", self.local_port))
-            .await
-            .context("failed TCP connection to local port")?;
         let mut remote_conn = BufReader::new(
             TcpStream::connect((&self.to[..], CONTROL_PORT))
                 .await
                 .context("failed TCP connection to remote port")?,
         );
-
         if let Some(auth) = &self.auth {
             auth.client_handshake(&mut remote_conn).await?;
         }
-
         send_json(&mut remote_conn, ClientMessage::Accept(id)).await?;
+
+        let local_conn = TcpStream::connect(("localhost", self.local_port))
+            .await
+            .context("failed TCP connection to local port")?;
+
         proxy(local_conn, remote_conn).await?;
         Ok(())
     }
