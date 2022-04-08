@@ -28,13 +28,13 @@ impl Authenticator {
     /// Validate a reply to a challenge.
     ///
     /// ```
-    /// use uuid:Uuid;
-    /// use crate::auth::Authenticator;
+    /// use bore_cli::auth::Authenticator;
+    /// use uuid::Uuid;
     ///
     /// let auth = Authenticator::new("secret");
     /// let challenge = Uuid::new_v4();
     ///
-    /// assert!(auth.validate(&challenge, auth.answer(&challenge)));
+    /// assert!(auth.validate(&challenge, &auth.answer(&challenge)));
     /// assert!(!auth.validate(&challenge, "wrong answer"));
     /// ```
     pub fn validate(&self, challenge: &Uuid, tag: &str) -> bool {
