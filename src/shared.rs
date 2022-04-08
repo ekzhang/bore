@@ -13,6 +13,9 @@ use uuid::Uuid;
 /// TCP port used for control connections with the server.
 pub const CONTROL_PORT: u16 = 7835;
 
+/// Timeout for network connections and initial protocol messages.
+pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// A message from the client on the control connection.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
@@ -84,8 +87,7 @@ pub async fn recv_json<T: DeserializeOwned>(
 pub async fn recv_json_timeout<T: DeserializeOwned>(
     reader: &mut (impl AsyncBufRead + Unpin),
 ) -> Result<Option<T>> {
-    const TIMEOUT: Duration = Duration::from_secs(3);
-    timeout(TIMEOUT, recv_json(reader, &mut Vec::new()))
+    timeout(NETWORK_TIMEOUT, recv_json(reader, &mut Vec::new()))
         .await
         .context("timed out waiting for initial message")?
 }
