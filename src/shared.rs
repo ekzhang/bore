@@ -1,9 +1,12 @@
 //! Shared data structures, utilities, and protocol definitions.
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::time::timeout;
 use uuid::Uuid;
 
 /// TCP port used for control connections with the server.
@@ -70,6 +73,19 @@ pub async fn recv_json<T: DeserializeOwned>(
         buf.pop();
     }
     Ok(serde_json::from_slice(buf).context("failed to parse JSON")?)
+}
+
+/// Read the next null-delimited JSON instruction, with a default timeout.
+///
+/// This is useful for parsing the initial message of a stream for handshake or
+/// other protocol purposes, where we do not want to wait indefinitely.
+pub async fn recv_json_timeout<T: DeserializeOwned>(
+    reader: &mut (impl AsyncBufRead + Unpin),
+) -> Result<Option<T>> {
+    const TIMEOUT: Duration = Duration::from_secs(3);
+    timeout(TIMEOUT, recv_json(reader, &mut Vec::new()))
+        .await
+        .context("timed out waiting for initial message")?
 }
 
 /// Send a null-terminated JSON instruction on a stream.

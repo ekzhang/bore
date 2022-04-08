@@ -13,7 +13,9 @@ use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{proxy, recv_json, send_json, ClientMessage, ServerMessage, CONTROL_PORT};
+use crate::shared::{
+    proxy, recv_json_timeout, send_json, ClientMessage, ServerMessage, CONTROL_PORT,
+};
 
 /// State structure for the server.
 pub struct Server {
@@ -71,10 +73,7 @@ impl Server {
             }
         }
 
-        let mut buf = Vec::new();
-        let msg = recv_json(&mut stream, &mut buf).await?;
-
-        match msg {
+        match recv_json_timeout(&mut stream).await? {
             Some(ClientMessage::Authenticate(_)) => {
                 warn!("unexpected authenticate");
                 Ok(())

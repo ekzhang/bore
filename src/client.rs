@@ -8,7 +8,9 @@ use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{proxy, recv_json, send_json, ClientMessage, ServerMessage, CONTROL_PORT};
+use crate::shared::{
+    proxy, recv_json, recv_json_timeout, send_json, ClientMessage, ServerMessage, CONTROL_PORT,
+};
 
 /// State structure for the client.
 pub struct Client {
@@ -42,7 +44,7 @@ impl Client {
         }
 
         send_json(&mut stream, ClientMessage::Hello(port)).await?;
-        let remote_port = match recv_json(&mut stream, &mut Vec::new()).await? {
+        let remote_port = match recv_json_timeout(&mut stream).await? {
             Some(ServerMessage::Hello(remote_port)) => remote_port,
             Some(ServerMessage::Error(message)) => bail!("server error: {message}"),
             Some(ServerMessage::Challenge(_)) => {
