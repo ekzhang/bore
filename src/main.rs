@@ -25,7 +25,7 @@ enum Command {
         #[clap(short, long, default_value_t = 0)]
         port: u16,
 
-        /// Optional secret.
+        /// Optional secret for authentication.
         #[clap(short, long)]
         secret: Option<String>,
     },
@@ -36,7 +36,7 @@ enum Command {
         #[clap(long, default_value_t = 1024)]
         min_port: u16,
 
-        /// Optional secret.
+        /// Optional secret for authentication.
         #[clap(short, long)]
         secret: Option<String>,
     },
@@ -54,11 +54,11 @@ async fn main() -> Result<()> {
             port,
             secret,
         } => {
-            let client = Client::new(local_port, &to, port, &secret).await?;
+            let client = Client::new(local_port, &to, port, secret.as_deref()).await?;
             client.listen().await?;
         }
         Command::Server { min_port, secret } => {
-            Server::new(min_port, &secret).listen().await?;
+            Server::new(min_port, secret.as_deref()).listen().await?;
         }
     }
 

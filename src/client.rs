@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use crate::auth;
 use anyhow::{bail, Context, Result};
 use tokio::{io::BufReader, net::TcpStream};
 use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
+use crate::auth::Authenticator;
 use crate::shared::{proxy, recv_json, send_json, ClientMessage, ServerMessage, CONTROL_PORT};
 
 /// State structure for the client.
@@ -24,37 +24,30 @@ pub struct Client {
     /// Port that is publicly available on the remote.
     remote_port: u16,
 
-    key: Option<auth::Key>,
+    /// Optional secret used to authenticate clients.
+    auth: Option<Authenticator>,
 }
 
 impl Client {
     /// Create a new client.
-    pub async fn new(
-        local_port: u16,
-        to: &str,
-        port: u16,
-        secret: &Option<String>,
-    ) -> Result<Self> {
-        let stream = TcpStream::connect((to, CONTROL_PORT)).await?;
+    pub async fn new(local_port: u16, to: &str, port: u16, secret: Option<&str>) -> Result<Self> {
+        let stream = TcpStream::connect((to, CONTROL_PORT))
+            .await
+            .with_context(|| format!("could not connect to {to}:{CONTROL_PORT}"))?;
         let mut stream = BufReader::new(stream);
 
-        let key = secret.as_ref().map(|s| auth::key_from_sec(s));
+        let auth = secret.map(Authenticator::new);
+        if let Some(auth) = &auth {
+            auth.client_handshake(&mut stream).await?;
+        }
 
         send_json(&mut stream, ClientMessage::Hello(port)).await?;
         let remote_port = match recv_json(&mut stream, &mut Vec::new()).await? {
             Some(ServerMessage::Hello(remote_port)) => remote_port,
-            Some(ServerMessage::Challenge(uuid, nonce)) => {
-                let key = match &key {
-                    Some(k) => k,
-                    None => bail!("server requested secret, but none was provided"),
-                };
-                match auth::answer_challenge(&mut stream, key, &uuid, &nonce).await {
-                    Ok(port) => port,
-                    Err(err) => bail!("could not authenticate: {err}"),
-                }
-            }
             Some(ServerMessage::Error(message)) => bail!("server error: {message}"),
-            Some(ServerMessage::Unauthenticated(message)) => bail!("unauthenticated: {message}"),
+            Some(ServerMessage::Challenge(_)) => {
+                bail!("server requires authentication, but no client secret was provided");
+            }
             Some(_) => bail!("unexpected initial non-hello message"),
             None => bail!("unexpected EOF"),
         };
@@ -65,8 +58,8 @@ impl Client {
             conn: Some(stream),
             to: to.to_string(),
             local_port,
-            key,
             remote_port,
+            auth,
         })
     }
 
@@ -84,14 +77,14 @@ impl Client {
             let msg = recv_json(&mut conn, &mut buf).await?;
             match msg {
                 Some(ServerMessage::Hello(_)) => warn!("unexpected hello"),
-                Some(ServerMessage::Challenge(_, _)) => warn!("unexpected challenge"),
+                Some(ServerMessage::Challenge(_)) => warn!("unexpected challenge"),
                 Some(ServerMessage::Heartbeat) => (),
-                Some(ServerMessage::Connection(id, nonce)) => {
+                Some(ServerMessage::Connection(id)) => {
                     let this = Arc::clone(&this);
                     tokio::spawn(
                         async move {
                             info!("new connection");
-                            match this.handle_connection(id, &nonce).await {
+                            match this.handle_connection(id).await {
                                 Ok(_) => info!("connection exited"),
                                 Err(err) => warn!(%err, "connection exited with error"),
                             }
@@ -100,22 +93,26 @@ impl Client {
                     );
                 }
                 Some(ServerMessage::Error(err)) => error!(%err, "server error"),
-                Some(ServerMessage::Unauthenticated(err)) => error!(%err, "unauthenticated"),
                 None => return Ok(()),
             }
         }
     }
 
-    async fn handle_connection(&self, id: Uuid, nonce: &Option<String>) -> Result<()> {
+    async fn handle_connection(&self, id: Uuid) -> Result<()> {
         let local_conn = TcpStream::connect(("localhost", self.local_port))
             .await
             .context("failed TCP connection to local port")?;
-        let mut remote_conn = TcpStream::connect((&self.to[..], CONTROL_PORT))
-            .await
-            .context("failed TCP connection to remote port")?;
+        let mut remote_conn = BufReader::new(
+            TcpStream::connect((&self.to[..], CONTROL_PORT))
+                .await
+                .context("failed TCP connection to remote port")?,
+        );
 
-        let challenge_resp = auth::response_for_accept_challenge(&self.key, &id, nonce)?;
-        send_json(&mut remote_conn, ClientMessage::Accept(id, challenge_resp)).await?;
+        if let Some(auth) = &self.auth {
+            auth.client_handshake(&mut remote_conn).await?;
+        }
+
+        send_json(&mut remote_conn, ClientMessage::Accept(id)).await?;
         proxy(local_conn, remote_conn).await?;
         Ok(())
     }

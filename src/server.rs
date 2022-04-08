@@ -12,7 +12,7 @@ use tokio::time::{sleep, timeout};
 use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
-use crate::auth;
+use crate::auth::Authenticator;
 use crate::shared::{proxy, recv_json, send_json, ClientMessage, ServerMessage, CONTROL_PORT};
 
 /// State structure for the server.
@@ -20,21 +20,20 @@ pub struct Server {
     /// The minimum TCP port that can be forwarded.
     min_port: u16,
 
-    /// Optional secret data to authenticate clients.
-    key: Option<auth::Key>,
+    /// Optional secret used to authenticate clients.
+    auth: Option<Authenticator>,
 
     /// Concurrent map of IDs to incoming connections.
-    conns: Arc<DashMap<Uuid, (TcpStream, Option<auth::ChallengeNonce>)>>,
+    conns: Arc<DashMap<Uuid, TcpStream>>,
 }
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(min_port: u16, secret: &Option<String>) -> Self {
-        let key = secret.as_ref().map(|s| auth::key_from_sec(s));
+    pub fn new(min_port: u16, secret: Option<&str>) -> Self {
         Server {
             min_port,
             conns: Arc::new(DashMap::new()),
-            key,
+            auth: secret.map(Authenticator::new),
         }
     }
 
@@ -64,20 +63,23 @@ impl Server {
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
         let mut stream = BufReader::new(stream);
+        if let Some(auth) = &self.auth {
+            if let Err(err) = auth.server_handshake(&mut stream).await {
+                warn!(%err, "server handshake failed");
+                send_json(&mut stream, ServerMessage::Error(err.to_string())).await?;
+                return Ok(());
+            }
+        }
 
         let mut buf = Vec::new();
         let msg = recv_json(&mut stream, &mut buf).await?;
 
         match msg {
+            Some(ClientMessage::Authenticate(_)) => {
+                warn!("unexpected authenticate");
+                Ok(())
+            }
             Some(ClientMessage::Hello(port)) => {
-                if let Some(key) = &self.key {
-                    if let Err(e) = auth::challenge(key, &mut stream).await {
-                        send_json(&mut stream, ServerMessage::Unauthenticated(format!("{e}")))
-                            .await?;
-                        return Ok(());
-                    }
-                }
-
                 if port != 0 && port < self.min_port {
                     warn!(?port, "client port number too low");
                     return Ok(());
@@ -114,9 +116,7 @@ impl Server {
                         let id = Uuid::new_v4();
                         let conns = Arc::clone(&self.conns);
 
-                        let chal_nonce = self.key.as_ref().map(|_| auth::gen_nonce());
-
-                        conns.insert(id, (stream2, chal_nonce));
+                        conns.insert(id, stream2);
                         tokio::spawn(async move {
                             // Remove stale entries to avoid memory leaks.
                             sleep(Duration::from_secs(10)).await;
@@ -124,32 +124,14 @@ impl Server {
                                 warn!(%id, "removed stale connection");
                             }
                         });
-
-                        let chal_nonce = chal_nonce.map(base64::encode);
-                        send_json(&mut stream, ServerMessage::Connection(id, chal_nonce)).await?;
+                        send_json(&mut stream, ServerMessage::Connection(id)).await?;
                     }
                 }
             }
-            Some(ClientMessage::ChallengeAnswer(_)) => {
-                warn!("unexpected challenge answer");
-                Ok(())
-            }
-            Some(ClientMessage::Accept(id, resp)) => {
+            Some(ClientMessage::Accept(id)) => {
                 info!(%id, "forwarding connection");
                 match self.conns.remove(&id) {
-                    Some((_, (stream2, nonce))) => {
-                        match auth::is_good_accept(&self.key, nonce, &id, &resp) {
-                            Ok(_) => proxy(stream, stream2).await?,
-                            Err(e) => {
-                                warn!("client connection challenge, MITM attempt? {e}");
-                                send_json(
-                                    &mut stream,
-                                    ServerMessage::Unauthenticated("invalid accept".into()),
-                                )
-                                .await?;
-                            }
-                        }
-                    }
+                    Some((_, stream2)) => proxy(stream, stream2).await?,
                     None => warn!(%id, "missing connection"),
                 }
                 Ok(())
@@ -164,6 +146,6 @@ impl Server {
 
 impl Default for Server {
     fn default() -> Self {
-        Server::new(1024, &None)
+        Server::new(1024, None)
     }
 }

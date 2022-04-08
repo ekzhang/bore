@@ -12,22 +12,21 @@ pub const CONTROL_PORT: u16 = 7835;
 /// A message from the client on the control connection.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
+    /// Response to an authentication challenge from the server.
+    Authenticate(String),
+
     /// Initial client message specifying a port to forward.
     Hello(u16),
 
-    /// Response to an authentication challenge from the server.
-    ChallengeAnswer(String),
-
     /// Accepts an incoming TCP connection, using this stream as a proxy.
-    /// The optional string is the challenge response.
-    Accept(Uuid, Option<String>),
+    Accept(Uuid),
 }
 
 /// A message from the server on the control connection.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ServerMessage {
-    /// Sent before server hello if authentication is required.
-    Challenge(Uuid, String),
+    /// Authentication challenge, sent as the first message, if enabled.
+    Challenge(Uuid),
 
     /// Response to a client's initial message, with actual public port.
     Hello(u16),
@@ -36,14 +35,10 @@ pub enum ServerMessage {
     Heartbeat,
 
     /// Asks the client to accept a forwarded TCP connection.
-    /// The option lstring is an authentication challenge.
-    Connection(Uuid, Option<String>),
+    Connection(Uuid),
 
     /// Indicates a server error that terminates the connection.
     Error(String),
-
-    /// Indicates that the client failed to authenticate, terminating the connection.
-    Unauthenticated(String),
 }
 
 /// Copy data mutually between two read/write streams.
