@@ -89,20 +89,16 @@ Whenever the server obtains a connection on the remote port, it generates a secu
 
 For correctness reasons and to avoid memory leaks, incoming connections are only stored by the server for up to 10 seconds before being discarded if the client does not accept them.
 
-## Optional authentication
+## Authentication
 
-The client and server can optionally use secrets to protect the server from
-being used by others. The secret is used as an encryption key. The client uses
-the key to answer challenges from the server on the initial connection to the
-server in between "Hello"s as well as on the "Connection"->"Accept" UUID
-exchange.
+On a custom deployment of `bore server`, you can optionally require a _secret_ to prevent the server from being used by others. The protocol requires clients to verify possession of the secret on each TCP connection by answering random challenges in the form of HMAC codes. (This secret is only used for the initial handshake, and no further traffic is encrypted by default.)
 
 ```shell
 # on the server
-bore server --secret my_secret
+bore server --secret my_secret_string
 
 # on the client
-bore local 5000 --to bore.pub --secret my_secret
+bore local <LOCAL_PORT> --to <TO> --secret my_secret_string
 ```
 
 ## Acknowledgements
