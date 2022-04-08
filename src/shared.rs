@@ -10,18 +10,25 @@ use uuid::Uuid;
 pub const CONTROL_PORT: u16 = 7835;
 
 /// A message from the client on the control connection.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
     /// Initial client message specifying a port to forward.
-    Hello((u16, Option<String>)),
+    Hello(u16),
+
+    /// Response to an authentication challenge from the server.
+    ChallengeAnswer(String),
 
     /// Accepts an incoming TCP connection, using this stream as a proxy.
-    Accept(Uuid),
+    /// The optional string is the challenge response.
+    Accept(Uuid, Option<String>),
 }
 
 /// A message from the server on the control connection.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ServerMessage {
+    /// Sent before server hello if authentication is required.
+    Challenge(Uuid, String),
+
     /// Response to a client's initial message, with actual public port.
     Hello(u16),
 
@@ -29,13 +36,14 @@ pub enum ServerMessage {
     Heartbeat,
 
     /// Asks the client to accept a forwarded TCP connection.
-    Connection(Uuid),
+    /// The option lstring is an authentication challenge.
+    Connection(Uuid, Option<String>),
 
     /// Indicates a server error that terminates the connection.
     Error(String),
 
-    /// Indicates a client error that terminates the connection.
-    ClientError(String),
+    /// Indicates that the client failed to authenticate, terminating the connection.
+    Unauthenticated(String),
 }
 
 /// Copy data mutually between two read/write streams.

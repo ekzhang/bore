@@ -17,14 +17,15 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { version = "1.0.56", features = ["backtrace"] }
+base64 = { version = "0.13.0" }
+chacha20poly1305 = { version = "0.9.0" }
 clap = { version = "3.1.8", features = ["derive"] }
 dashmap = "5.2.0"
+rand = { version = "0.8.5" }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
+sha2 = { version = "0.10.2" }
 tokio = { version = "1.17.0", features = ["full"] }
 tracing = "0.1.32"
 tracing-subscriber = "0.3.10"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-chacha20poly1305 = { version = "0.9.0" }
-rand = { version = "0.8.5" }
-base64 = { version = "0.13.0" }

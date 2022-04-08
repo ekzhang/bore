@@ -19,7 +19,7 @@ This will expose your local port at `localhost:8000` to the public internet at `
 
 Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok](https://ngrok.io/), except `bore` is intended to be a highly efficient, unopinionated tool for forwarding TCP traffic that is simple to install and easy to self-host, with no frills attached.
 
-(`bore` totals less than 500 lines of safe, async Rust code and is trivial to set up — just run a single binary for the client and server.)
+(`bore` totals less than 600 lines of safe, async Rust code and is trivial to set up — just run a single binary for the client and server.)
 
 ## Detailed Usage
 
@@ -50,7 +50,7 @@ ARGS:
 OPTIONS:
     -h, --help               Print help information
     -p, --port <PORT>        Optional port on the remote server to select [default: 0]
-    -s, --secret <SECRET>    Optional secret. Must be 32 bytes or fewer
+    -s, --secret <SECRET>    Optional secret.
     -t, --to <TO>            Address of the remote server to expose local ports to
     -V, --version            Print version information
 ```
@@ -77,7 +77,7 @@ USAGE:
 OPTIONS:
     -h, --help                   Print help information
         --min-port <MIN_PORT>    Minimum TCP port number to accept [default: 1024]
-    -s, --secret <SECRET>        Optional secret. Must be 32 bytes or fewer
+    -s, --secret <SECRET>        Optional secret.
     -V, --version                Print version information
 ```
 
@@ -92,9 +92,10 @@ For correctness reasons and to avoid memory leaks, incoming connections are only
 ## Optional authentication
 
 The client and server can optionally use secrets to protect the server from
-being used by others. The secret is sent only by the client as encrypted base64
-by using itself as a key with a randomly generated nonce. No additional traffic
-is encrypted; only the secret.
+being used by others. The secret is used as an encryption key. The client uses
+the key to answer challenges from the server on the initial connection to the
+server in between "Hello"s as well as on the "Connection"->"Accept" UUID
+exchange.
 
 ```shell
 # on the server

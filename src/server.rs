@@ -24,27 +24,18 @@ pub struct Server {
     key: Option<auth::Key>,
 
     /// Concurrent map of IDs to incoming connections.
-    conns: Arc<DashMap<Uuid, TcpStream>>,
+    conns: Arc<DashMap<Uuid, (TcpStream, Option<auth::ChallengeNonce>)>>,
 }
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(min_port: u16) -> Self {
+    pub fn new(min_port: u16, secret: &Option<String>) -> Self {
+        let key = secret.as_ref().map(|s| auth::key_from_sec(s));
         Server {
             min_port,
             conns: Arc::new(DashMap::new()),
-            key: None,
+            key,
         }
-    }
-
-    /// Create a new server with a specified minimum port number an a secret.
-    pub fn new_with_secret(min_port: u16, secret: &str) -> Result<Self> {
-        let key = auth::key_from_sec(secret)?;
-        Ok(Server {
-            min_port,
-            conns: Arc::new(DashMap::new()),
-            key: Some(key),
-        })
     }
 
     /// Start the server, listening for new connections.
@@ -78,10 +69,13 @@ impl Server {
         let msg = recv_json(&mut stream, &mut buf).await?;
 
         match msg {
-            Some(ClientMessage::Hello((port, secret))) => {
-                if let Err(e) = self.authenticate(secret) {
-                    send_json(&mut stream, ServerMessage::ClientError(e.into())).await?;
-                    return Ok(());
+            Some(ClientMessage::Hello(port)) => {
+                if let Some(key) = &self.key {
+                    if let Err(e) = auth::challenge(key, &mut stream).await {
+                        send_json(&mut stream, ServerMessage::Unauthenticated(format!("{e}")))
+                            .await?;
+                        return Ok(());
+                    }
                 }
 
                 if port != 0 && port < self.min_port {
@@ -119,7 +113,10 @@ impl Server {
 
                         let id = Uuid::new_v4();
                         let conns = Arc::clone(&self.conns);
-                        conns.insert(id, stream2);
+
+                        let chal_nonce = self.key.as_ref().map(|_| auth::gen_nonce());
+
+                        conns.insert(id, (stream2, chal_nonce));
                         tokio::spawn(async move {
                             // Remove stale entries to avoid memory leaks.
                             sleep(Duration::from_secs(10)).await;
@@ -127,14 +124,32 @@ impl Server {
                                 warn!(%id, "removed stale connection");
                             }
                         });
-                        send_json(&mut stream, ServerMessage::Connection(id)).await?;
+
+                        let chal_nonce = chal_nonce.map(base64::encode);
+                        send_json(&mut stream, ServerMessage::Connection(id, chal_nonce)).await?;
                     }
                 }
             }
-            Some(ClientMessage::Accept(id)) => {
+            Some(ClientMessage::ChallengeAnswer(_)) => {
+                warn!("unexpected challenge answer");
+                Ok(())
+            }
+            Some(ClientMessage::Accept(id, resp)) => {
                 info!(%id, "forwarding connection");
                 match self.conns.remove(&id) {
-                    Some((_, stream2)) => proxy(stream, stream2).await?,
+                    Some((_, (stream2, nonce))) => {
+                        match auth::is_good_accept(&self.key, nonce, &id, &resp) {
+                            Ok(_) => proxy(stream, stream2).await?,
+                            Err(e) => {
+                                warn!("client connection challenge, MITM attempt? {e}");
+                                send_json(
+                                    &mut stream,
+                                    ServerMessage::Unauthenticated("invalid accept".into()),
+                                )
+                                .await?;
+                            }
+                        }
+                    }
                     None => warn!(%id, "missing connection"),
                 }
                 Ok(())
@@ -145,32 +160,10 @@ impl Server {
             }
         }
     }
-
-    fn authenticate(&self, secret: Option<String>) -> Result<(), &'static str> {
-        match (&self.key, secret) {
-            (Some(key), Some(cln_sec)) => {
-                if auth::secrets_match(&key, &cln_sec).is_err() {
-                    warn!("incorrect secret provided");
-                    Err("incorrect secret".into())
-                } else {
-                    Ok(())
-                }
-            }
-            (None, Some(_)) => {
-                warn!("secret provided but not configured on server");
-                Err("incorrect secret".into())
-            }
-            (Some(_), None) => {
-                warn!("no secret provided");
-                Err("secret is required".into())
-            }
-            (None, None) => Ok(()),
-        }
-    }
 }
 
 impl Default for Server {
     fn default() -> Self {
-        Server::new(1024)
+        Server::new(1024, &None)
     }
 }
