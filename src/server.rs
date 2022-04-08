@@ -12,6 +12,7 @@ use tokio::time::{sleep, timeout};
 use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
+use crate::auth::Authenticator;
 use crate::shared::{proxy, recv_json, send_json, ClientMessage, ServerMessage, CONTROL_PORT};
 
 /// State structure for the server.
@@ -19,16 +20,20 @@ pub struct Server {
     /// The minimum TCP port that can be forwarded.
     min_port: u16,
 
+    /// Optional secret used to authenticate clients.
+    auth: Option<Authenticator>,
+
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
 }
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(min_port: u16) -> Self {
+    pub fn new(min_port: u16, secret: Option<&str>) -> Self {
         Server {
             min_port,
             conns: Arc::new(DashMap::new()),
+            auth: secret.map(Authenticator::new),
         }
     }
 
@@ -58,11 +63,22 @@ impl Server {
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
         let mut stream = BufReader::new(stream);
+        if let Some(auth) = &self.auth {
+            if let Err(err) = auth.server_handshake(&mut stream).await {
+                warn!(%err, "server handshake failed");
+                send_json(&mut stream, ServerMessage::Error(err.to_string())).await?;
+                return Ok(());
+            }
+        }
 
         let mut buf = Vec::new();
         let msg = recv_json(&mut stream, &mut buf).await?;
 
         match msg {
+            Some(ClientMessage::Authenticate(_)) => {
+                warn!("unexpected authenticate");
+                Ok(())
+            }
             Some(ClientMessage::Hello(port)) => {
                 if port != 0 && port < self.min_port {
                     warn!(?port, "client port number too low");
@@ -99,6 +115,7 @@ impl Server {
 
                         let id = Uuid::new_v4();
                         let conns = Arc::clone(&self.conns);
+
                         conns.insert(id, stream2);
                         tokio::spawn(async move {
                             // Remove stale entries to avoid memory leaks.
@@ -129,6 +146,6 @@ impl Server {
 
 impl Default for Server {
     fn default() -> Self {
-        Server::new(1024)
+        Server::new(1024, None)
     }
 }

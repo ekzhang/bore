@@ -19,7 +19,7 @@ This will expose your local port at `localhost:8000` to the public internet at `
 
 Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok](https://ngrok.io/), except `bore` is intended to be a highly efficient, unopinionated tool for forwarding TCP traffic that is simple to install and easy to self-host, with no frills attached.
 
-(`bore` totals less than 300 lines of safe, async Rust code and is trivial to set up — just run a single binary for the client and server.)
+(`bore` totals less than 400 lines of safe, async Rust code and is trivial to set up — just run a single binary for the client and server.)
 
 ## Detailed Usage
 
@@ -38,7 +38,7 @@ You can optionally pass in a `--port` option to pick a specific port on the remo
 The full options are shown below.
 
 ```shell
-bore-local 0.1.0
+bore-local 0.1.1
 Starts a local proxy to the remote server
 
 USAGE:
@@ -48,10 +48,11 @@ ARGS:
     <LOCAL_PORT>    The local port to listen on
 
 OPTIONS:
-    -h, --help           Print help information
-    -p, --port <PORT>    Optional port on the remote server to select [default: 0]
-    -t, --to <TO>        Address of the remote server to expose local ports to
-    -V, --version        Print version information
+    -h, --help               Print help information
+    -p, --port <PORT>        Optional port on the remote server to select [default: 0]
+    -s, --secret <SECRET>    Optional secret for authentication
+    -t, --to <TO>            Address of the remote server to expose local ports to
+    -V, --version            Print version information
 ```
 
 ### Self-Hosting
@@ -67,7 +68,7 @@ That's all it takes! After the server starts running at a given address, you can
 The full options for the `bore server` command are shown below.
 
 ```shell
-bore-server 0.1.0
+bore-server 0.1.1
 Runs the remote proxy server
 
 USAGE:
@@ -76,6 +77,7 @@ USAGE:
 OPTIONS:
     -h, --help                   Print help information
         --min-port <MIN_PORT>    Minimum TCP port number to accept [default: 1024]
+    -s, --secret <SECRET>        Optional secret for authentication
     -V, --version                Print version information
 ```
 
@@ -86,6 +88,18 @@ There is an implicit _control port_ at `7835`, used for creating new connections
 Whenever the server obtains a connection on the remote port, it generates a secure [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) for that connection and sends it back to the client. The client then opens a separate TCP stream to the server and sends an "Accept" message containing the UUID on that stream. The server then proxies the two connections between each other.
 
 For correctness reasons and to avoid memory leaks, incoming connections are only stored by the server for up to 10 seconds before being discarded if the client does not accept them.
+
+## Authentication
+
+On a custom deployment of `bore server`, you can optionally require a _secret_ to prevent the server from being used by others. The protocol requires clients to verify possession of the secret on each TCP connection by answering random challenges in the form of HMAC codes. (This secret is only used for the initial handshake, and no further traffic is encrypted by default.)
+
+```shell
+# on the server
+bore server --secret my_secret_string
+
+# on the client
+bore local <LOCAL_PORT> --to <TO> --secret my_secret_string
+```
 
 ## Acknowledgements
 

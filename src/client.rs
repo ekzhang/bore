@@ -7,6 +7,7 @@ use tokio::{io::BufReader, net::TcpStream};
 use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
+use crate::auth::Authenticator;
 use crate::shared::{proxy, recv_json, send_json, ClientMessage, ServerMessage, CONTROL_PORT};
 
 /// State structure for the client.
@@ -22,18 +23,31 @@ pub struct Client {
 
     /// Port that is publicly available on the remote.
     remote_port: u16,
+
+    /// Optional secret used to authenticate clients.
+    auth: Option<Authenticator>,
 }
 
 impl Client {
     /// Create a new client.
-    pub async fn new(local_port: u16, to: &str, port: u16) -> Result<Self> {
-        let stream = TcpStream::connect((to, CONTROL_PORT)).await?;
+    pub async fn new(local_port: u16, to: &str, port: u16, secret: Option<&str>) -> Result<Self> {
+        let stream = TcpStream::connect((to, CONTROL_PORT))
+            .await
+            .with_context(|| format!("could not connect to {to}:{CONTROL_PORT}"))?;
         let mut stream = BufReader::new(stream);
+
+        let auth = secret.map(Authenticator::new);
+        if let Some(auth) = &auth {
+            auth.client_handshake(&mut stream).await?;
+        }
 
         send_json(&mut stream, ClientMessage::Hello(port)).await?;
         let remote_port = match recv_json(&mut stream, &mut Vec::new()).await? {
             Some(ServerMessage::Hello(remote_port)) => remote_port,
             Some(ServerMessage::Error(message)) => bail!("server error: {message}"),
+            Some(ServerMessage::Challenge(_)) => {
+                bail!("server requires authentication, but no client secret was provided");
+            }
             Some(_) => bail!("unexpected initial non-hello message"),
             None => bail!("unexpected EOF"),
         };
@@ -45,6 +59,7 @@ impl Client {
             to: to.to_string(),
             local_port,
             remote_port,
+            auth,
         })
     }
 
@@ -62,6 +77,7 @@ impl Client {
             let msg = recv_json(&mut conn, &mut buf).await?;
             match msg {
                 Some(ServerMessage::Hello(_)) => warn!("unexpected hello"),
+                Some(ServerMessage::Challenge(_)) => warn!("unexpected challenge"),
                 Some(ServerMessage::Heartbeat) => (),
                 Some(ServerMessage::Connection(id)) => {
                     let this = Arc::clone(&this);
@@ -86,9 +102,15 @@ impl Client {
         let local_conn = TcpStream::connect(("localhost", self.local_port))
             .await
             .context("failed TCP connection to local port")?;
-        let mut remote_conn = TcpStream::connect((&self.to[..], CONTROL_PORT))
-            .await
-            .context("failed TCP connection to remote port")?;
+        let mut remote_conn = BufReader::new(
+            TcpStream::connect((&self.to[..], CONTROL_PORT))
+                .await
+                .context("failed TCP connection to remote port")?,
+        );
+
+        if let Some(auth) = &self.auth {
+            auth.client_handshake(&mut remote_conn).await?;
+        }
 
         send_json(&mut remote_conn, ClientMessage::Accept(id)).await?;
         proxy(local_conn, remote_conn).await?;
