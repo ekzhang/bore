@@ -7,6 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::time::timeout;
+use tracing::trace;
 use uuid::Uuid;
 
 /// TCP port used for control connections with the server.
@@ -64,6 +65,7 @@ pub async fn recv_json<T: DeserializeOwned>(
     reader: &mut (impl AsyncBufRead + Unpin),
     buf: &mut Vec<u8>,
 ) -> Result<Option<T>> {
+    trace!("waiting to receive json message");
     buf.clear();
     reader.read_until(0, buf).await?;
     if buf.is_empty() {
@@ -90,6 +92,7 @@ pub async fn recv_json_timeout<T: DeserializeOwned>(
 
 /// Send a null-terminated JSON instruction on a stream.
 pub async fn send_json<T: Serialize>(writer: &mut (impl AsyncWrite + Unpin), msg: T) -> Result<()> {
+    trace!("sending json message");
     let msg = serde_json::to_vec(&msg)?;
     writer.write_all(&msg).await?;
     writer.write_all(&[0]).await?;
