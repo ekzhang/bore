@@ -1,16 +1,14 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bore_cli::{client::Client, server::Server};
 use lazy_static::lazy_static;
 use rstest::*;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-    sync::Mutex,
-    time,
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex;
+use tokio::time;
 
 lazy_static! {
     /// Guard to make sure that tests are run serially, not concurrently.
@@ -59,6 +57,11 @@ async fn basic_proxy(#[values(None, Some(""), Some("abc"))] secret: Option<&str>
 
     // Ensure that the client end of the stream is closed now.
     assert_eq!(stream.read(&mut buf).await?, 0);
+
+    // Also ensure that additional connections do not produce any data.
+    let mut stream = TcpStream::connect(addr).await?;
+    assert_eq!(stream.read(&mut buf).await?, 0);
+
     Ok(())
 }
 
@@ -74,4 +77,24 @@ async fn mismatched_secret(
 
     spawn_server(server_secret).await;
     assert!(spawn_client(client_secret).await.is_err());
+}
+
+#[tokio::test]
+async fn invalid_address() -> Result<()> {
+    // We don't need the serial guard for this test because it doesn't create a server.
+    async fn check_address(to: &str, use_secret: bool) -> Result<()> {
+        match Client::new(5000, to, 0, use_secret.then(|| "a secret")).await {
+            Ok(_) => Err(anyhow!("expected error for {to}, use_secret={use_secret}")),
+            Err(_) => Ok(()),
+        }
+    }
+    tokio::try_join!(
+        check_address("google.com", false),
+        check_address("google.com", true),
+        check_address("nonexistent.domain.for.demonstration", false),
+        check_address("nonexistent.domain.for.demonstration", true),
+        check_address("malformed !$uri$%", false),
+        check_address("malformed !$uri$%", true),
+    )?;
+    Ok(())
 }
