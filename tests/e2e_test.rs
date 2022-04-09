@@ -61,3 +61,17 @@ async fn basic_proxy(#[values(None, Some(""), Some("abc"))] secret: Option<&str>
     assert_eq!(stream.read(&mut buf).await?, 0);
     Ok(())
 }
+
+#[rstest]
+#[case(None, Some("my secret"))]
+#[case(Some("my secret"), None)]
+#[tokio::test]
+async fn mismatched_secret(
+    #[case] server_secret: Option<&str>,
+    #[case] client_secret: Option<&str>,
+) {
+    let _guard = SERIAL_GUARD.lock().await;
+
+    spawn_server(server_secret).await;
+    assert!(spawn_client(client_secret).await.is_err());
+}
