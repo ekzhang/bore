@@ -30,7 +30,7 @@ jobs:
           toolchain: stable
           components: rustfmt
 
-      - run: cargo fmt -- --check
+      - run: rustfmt --edition 2021 **/*.rs --check
 
   clippy:
     name: Clippy
@@ -44,4 +44,4 @@ jobs:
           toolchain: stable
           components: clippy
 
-      - run: cargo clippy
+      - run: cargo clippy -- -D warnings
