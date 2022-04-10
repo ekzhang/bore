@@ -57,7 +57,7 @@ OPTIONS:
 
 ### Self-Hosting
 
-As mentioned in the startup instructions, there is an public instance of the `bore` server running at `bore.pub`. However, if you want to self-host `bore` on your own network, you can do so with the following command:
+As mentioned in the startup instructions, there is a public instance of the `bore` server running at `bore.pub`. However, if you want to self-host `bore` on your own network, you can do so with the following command:
 
 ```shell
 bore server
