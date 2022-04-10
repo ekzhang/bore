@@ -1,10 +1,12 @@
-FROM rust:1.60.0-buster as builder
-WORKDIR /use/src/app
+FROM rust:alpine as builder
+WORKDIR /home/rust/src
+RUN apk --no-cache add musl-dev
 COPY . .
 RUN cargo install --path .
 
-FROM debian:buster-slim
-COPY --from=builder /usr/local/cargo/bin/bore /usr/local/bin/bore
-ENTRYPOINT ["bore"]
+FROM scratch
+COPY --from=builder /usr/local/cargo/bin/bore .
+USER 1000:1000
+ENTRYPOINT ["./bore"]
 CMD ["--help"]
 
