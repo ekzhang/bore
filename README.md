@@ -8,7 +8,10 @@ A modern, simple TCP tunnel in Rust that exposes local ports to a remote server,
 ![Video demo](https://i.imgur.com/vDeGsmx.gif)
 
 ```shell
-# Installation (requires Rust)
+# Installation from GitHub release
+sudo curl -LSfs https://raw.githubusercontent.com/ekzhang/bore/main/ci/install.sh | sudo sh -s -- --git ekzhang/bore
+
+# Installation from crates.io (requires Rust)
 cargo install bore-cli
 
 # On your local machine
