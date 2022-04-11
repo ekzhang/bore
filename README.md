@@ -29,7 +29,7 @@ You can build the `bore` CLI command from source using [Cargo](https://doc.rust-
 cargo install bore-cli
 ```
 
-We also publish versioned Docker images for each release. Each image is built for AMD 64-bit, Arm 64-bit, and Armv7 architectures. They're tagged with the specific version and allow you to run the statically-linked `bore` binary from a minimal "scratch" container.
+We also publish versioned Docker images for each release. Each image is built for AMD 64-bit and Arm 64-bit architectures. They're tagged with the specific version and allow you to run the statically-linked `bore` binary from a minimal "scratch" container.
 
 ```shell
 docker run -it --init --rm --network host ekzhang/bore <ARGS>
@@ -52,7 +52,7 @@ You can optionally pass in a `--port` option to pick a specific port on the remo
 The full options are shown below.
 
 ```shell
-bore-local 0.2.2
+bore-local 0.2.3
 Starts a local proxy to the remote server
 
 USAGE:
@@ -82,7 +82,7 @@ That's all it takes! After the server starts running at a given address, you can
 The full options for the `bore server` command are shown below.
 
 ```shell
-bore-server 0.2.2
+bore-server 0.2.3
 Runs the remote proxy server
 
 USAGE:
