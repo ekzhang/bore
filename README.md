@@ -23,19 +23,17 @@ Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok]
 
 ## Installation
 
-You can build the `bore` CLI command from source using [Cargo](https://crates.io/), which is bundled with the latest stable Rust toolchain. This command and will install the release `bore` binary at a user-accessible path.
+You can build the `bore` CLI command from source using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager. This command installs the `bore` binary at a user-accessible path.
 
 ```shell
 cargo install bore-cli
 ```
 
-If you have Docker installed on your computer, you can alternatively run the `bore` binary from a minimal "scratch" container.
+We also publish versioned Docker images for each release. Each image is built for AMD 64-bit, Arm 64-bit, and Armv7 architectures. They're tagged with the specific version and allow you to run the statically-linked `bore` binary from a minimal "scratch" container.
 
 ```shell
 docker run -it --init --rm --network host ekzhang/bore <ARGS>
 ```
-
-We publish versioned Docker images for each release, in addition to the `latest` tag. Each image is built for AMD 64-bit, Arm 64-bit, and Armv7 architectures.
 
 ## Detailed Usage
 
@@ -54,7 +52,7 @@ You can optionally pass in a `--port` option to pick a specific port on the remo
 The full options are shown below.
 
 ```shell
-bore-local 0.2.1
+bore-local 0.2.2
 Starts a local proxy to the remote server
 
 USAGE:
@@ -84,7 +82,7 @@ That's all it takes! After the server starts running at a given address, you can
 The full options for the `bore server` command are shown below.
 
 ```shell
-bore-server 0.2.1
+bore-server 0.2.2
 Runs the remote proxy server
 
 USAGE:
