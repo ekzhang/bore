@@ -21,6 +21,9 @@ pub struct Client {
     /// Destination address of the server.
     to: String,
 
+    // Local host that is forwarded.
+    local_host: String,
+
     /// Local port that is forwarded.
     local_port: u16,
 
@@ -33,7 +36,13 @@ pub struct Client {
 
 impl Client {
     /// Create a new client.
-    pub async fn new(local_port: u16, to: &str, port: u16, secret: Option<&str>) -> Result<Self> {
+    pub async fn new(
+        local_host: &str,
+        local_port: u16,
+        to: &str,
+        port: u16,
+        secret: Option<&str>,
+    ) -> Result<Self> {
         let mut stream = BufReader::new(connect_with_timeout(to, CONTROL_PORT).await?);
 
         let auth = secret.map(Authenticator::new);
@@ -57,6 +66,7 @@ impl Client {
         Ok(Client {
             conn: Some(stream),
             to: to.to_string(),
+            local_host: local_host.to_string(),
             local_port,
             remote_port,
             auth,
@@ -106,7 +116,7 @@ impl Client {
         }
         send_json(&mut remote_conn, ClientMessage::Accept(id)).await?;
 
-        let local_conn = connect_with_timeout("localhost", self.local_port).await?;
+        let local_conn = connect_with_timeout(&self.local_host, self.local_port).await?;
         proxy(local_conn, remote_conn).await?;
         Ok(())
     }

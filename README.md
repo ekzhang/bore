@@ -59,14 +59,15 @@ USAGE:
     bore local [OPTIONS] --to <TO> <LOCAL_PORT>
 
 ARGS:
-    <LOCAL_PORT>    The local port to listen on
+    <LOCAL_PORT>    The local port to connect to
 
 OPTIONS:
-    -h, --help               Print help information
-    -p, --port <PORT>        Optional port on the remote server to select [default: 0]
-    -s, --secret <SECRET>    Optional secret for authentication
-    -t, --to <TO>            Address of the remote server to expose local ports to
-    -V, --version            Print version information
+    -h, --help                       Print help information
+    -l, --local-host <LOCAL_HOST>    The local host to connect to [default: localhost]
+    -p, --port <PORT>                Optional port on the remote server to select [default: 0]
+    -s, --secret <SECRET>            Optional secret for authentication
+    -t, --to <TO>                    Address of the remote server to expose local ports to
+    -V, --version                    Print version information
 ```
 
 ### Self-Hosting
