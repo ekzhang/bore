@@ -24,14 +24,8 @@ async fn spawn_server(secret: Option<&str>) {
 /// Spawns a client with randomly assigned ports, returning the listener and remote address.
 async fn spawn_client(secret: Option<&str>) -> Result<(TcpListener, SocketAddr)> {
     let listener = TcpListener::bind("localhost:0").await?;
-    let client = Client::new(
-        "localhost",
-        listener.local_addr()?.port(),
-        "localhost",
-        0,
-        secret,
-    )
-    .await?;
+    let local_port = listener.local_addr()?.port();
+    let client = Client::new("localhost", local_port, "localhost", 0, secret).await?;
     let remote_addr = ([0, 0, 0, 0], client.remote_port()).into();
     tokio::spawn(client.listen());
     Ok((listener, remote_addr))

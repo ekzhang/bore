@@ -14,11 +14,11 @@ struct Args {
 enum Command {
     /// Starts a local proxy to the remote server.
     Local {
-        /// The local port to connect to.
+        /// The local port to expose.
         local_port: u16,
 
-        /// The local host to connect to.
-        #[clap(short, long, default_value = "localhost")]
+        /// The local host to expose.
+        #[clap(short, long, value_name = "HOST", default_value = "localhost")]
         local_host: String,
 
         /// Address of the remote server to expose local ports to.
