@@ -11,6 +11,10 @@ categories = ["network-programming", "web-programming", "command-line-utilities"
 readme = "README.md"
 edition = "2021"
 
+[package.metadata.nix]
+build = true
+app = true
+
 [[bin]]
 name = "bore"
 path = "src/main.rs"
