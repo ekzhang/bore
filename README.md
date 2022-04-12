@@ -47,7 +47,7 @@ You can forward a port on your local machine by using the `bore local` command. 
 bore local 5000 --to bore.pub
 ```
 
-You can optionally pass in a `--port` option to pick a specific port on the remote to expose, although the command will fail if this port is not available.
+You can optionally pass in a `--port` option to pick a specific port on the remote to expose, although the command will fail if this port is not available. Also, passing `--local-host` allows you to expose a different host on your local area network besides the loopback address `localhost`.
 
 The full options are shown below.
 
@@ -59,14 +59,15 @@ USAGE:
     bore local [OPTIONS] --to <TO> <LOCAL_PORT>
 
 ARGS:
-    <LOCAL_PORT>    The local port to listen on
+    <LOCAL_PORT>    The local port to expose
 
 OPTIONS:
-    -h, --help               Print help information
-    -p, --port <PORT>        Optional port on the remote server to select [default: 0]
-    -s, --secret <SECRET>    Optional secret for authentication
-    -t, --to <TO>            Address of the remote server to expose local ports to
-    -V, --version            Print version information
+    -h, --help                 Print help information
+    -l, --local-host <HOST>    The local host to expose [default: localhost]
+    -p, --port <PORT>          Optional port on the remote server to select [default: 0]
+    -s, --secret <SECRET>      Optional secret for authentication
+    -t, --to <TO>              Address of the remote server to expose local ports to
+    -V, --version              Print version information
 ```
 
 ### Self-Hosting
