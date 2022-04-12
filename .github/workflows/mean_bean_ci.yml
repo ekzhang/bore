@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        channel: [stable, beta, nightly]
+        channel: [stable]
         target:
           - x86_64-apple-darwin
 
@@ -83,7 +83,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        channel: [stable, beta, nightly]
+        channel: [stable]
         target:
           - arm-unknown-linux-gnueabi
           - armv7-unknown-linux-gnueabihf
@@ -111,7 +111,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        channel: [stable, beta, nightly]
+        channel: [stable]
         target:
           # MSVC
           - i686-pc-windows-msvc
