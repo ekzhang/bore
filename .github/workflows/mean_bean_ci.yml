@@ -89,3 +89,35 @@ jobs:
           - armv7-unknown-linux-gnueabihf
           - i686-unknown-linux-musl
           - x86_64-unknown-linux-musl
+
+  windows:
+    runs-on: windows-latest
+    # Windows technically doesn't need this, but if we don't block windows on it
+    # some of the windows jobs could fill up the concurrent job queue before
+    # one of the install-cross jobs has started, so this makes sure all
+    # artifacts are downloaded first.
+    needs: install-cross
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
+        shell: bash
+      - run: ci/build.bash cargo ${{ matrix.target }}
+        shell: bash
+      - run: ci/test.bash cargo ${{ matrix.target }}
+        shell: bash
+
+    strategy:
+      fail-fast: true
+      matrix:
+        channel: [stable, beta, nightly]
+        target:
+          # MSVC
+          - i686-pc-windows-msvc
+          - x86_64-pc-windows-msvc
+          # GNU: You typically only need to test Windows GNU if you're
+          # specifically targetting it, and it can cause issues with some
+          # dependencies if you're not so it's disabled by self.
+          # - i686-pc-windows-gnu
+          # - x86_64-pc-windows-gnu
