@@ -1,7 +1,6 @@
 use anyhow::Result;
 use bore_cli::{client::Client, server::Server};
 use clap::{Parser, Subcommand};
-use tokio::runtime::Builder;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -47,32 +46,28 @@ enum Command {
     },
 }
 
+#[tokio::main]
+async fn run(command: Command) -> Result<()> {
+    match command {
+        Command::Local {
+            local_host,
+            local_port,
+            to,
+            port,
+            secret,
+        } => {
+            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            client.listen().await?;
+        }
+        Command::Server { min_port, secret } => {
+            Server::new(min_port, secret.as_deref()).listen().await?;
+        }
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-
-    let Args { command } = Args::parse();
-
-    Builder::new_multi_thread()
-        .enable_all()
-        .build()?
-        .block_on(async {
-            match command {
-                Command::Local {
-                    local_host,
-                    local_port,
-                    to,
-                    port,
-                    secret,
-                } => {
-                    let client =
-                        Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
-                    client.listen().await?;
-                }
-                Command::Server { min_port, secret } => {
-                    Server::new(min_port, secret.as_deref()).listen().await?;
-                }
-            }
-
-            Ok(())
-        })
+    run(Args::parse().command)
 }
