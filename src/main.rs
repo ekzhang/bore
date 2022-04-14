@@ -30,7 +30,7 @@ enum Command {
         port: u16,
 
         /// Optional secret for authentication.
-        #[clap(short, long)]
+        #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
     },
 
@@ -41,7 +41,7 @@ enum Command {
         min_port: u16,
 
         /// Optional secret for authentication.
-        #[clap(short, long)]
+        #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
     },
 }

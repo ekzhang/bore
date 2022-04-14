@@ -65,7 +65,7 @@ OPTIONS:
     -h, --help                 Print help information
     -l, --local-host <HOST>    The local host to expose [default: localhost]
     -p, --port <PORT>          Optional port on the remote server to select [default: 0]
-    -s, --secret <SECRET>      Optional secret for authentication
+    -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
     -t, --to <TO>              Address of the remote server to expose local ports to
     -V, --version              Print version information
 ```
@@ -92,7 +92,7 @@ USAGE:
 OPTIONS:
     -h, --help                   Print help information
         --min-port <MIN_PORT>    Minimum TCP port number to accept [default: 1024]
-    -s, --secret <SECRET>        Optional secret for authentication
+    -s, --secret <SECRET>        Optional secret for authentication [env: BORE_SECRET]
     -V, --version                Print version information
 ```
 
@@ -115,6 +115,8 @@ bore server --secret my_secret_string
 # on the client
 bore local <LOCAL_PORT> --to <TO> --secret my_secret_string
 ```
+
+`BORE_SECRET` environment variable can also be used for setting the secret for client/server.
 
 ## Acknowledgements
 
