@@ -52,7 +52,7 @@ You can optionally pass in a `--port` option to pick a specific port on the remo
 The full options are shown below.
 
 ```shell
-bore-local 0.2.3
+bore-local 0.3.0
 Starts a local proxy to the remote server
 
 USAGE:
@@ -83,7 +83,7 @@ That's all it takes! After the server starts running at a given address, you can
 The full options for the `bore server` command are shown below.
 
 ```shell
-bore-server 0.2.3
+bore-server 0.3.0
 Runs the remote proxy server
 
 USAGE:
@@ -116,7 +116,7 @@ bore server --secret my_secret_string
 bore local <LOCAL_PORT> --to <TO> --secret my_secret_string
 ```
 
-`BORE_SECRET` environment variable can also be used for setting the secret for client/server.
+If a secret is not present in the arguments, `bore` will also attempt to read from the `BORE_SECRET` environment variable.
 
 ## Acknowledgements
 
