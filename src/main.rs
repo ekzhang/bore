@@ -47,11 +47,8 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-
-    let args = Args::parse();
-    match args.command {
+async fn run(command: Command) -> Result<()> {
+    match command {
         Command::Local {
             local_host,
             local_port,
@@ -68,4 +65,9 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+    run(Args::parse().command)
 }
