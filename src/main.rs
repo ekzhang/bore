@@ -50,7 +50,7 @@ enum Command {
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let Args { command } = Args::try_parse()?;
+    let Args { command } = Args::parse();
 
     Builder::new_multi_thread()
         .enable_all()
