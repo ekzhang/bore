@@ -63,6 +63,29 @@ impl Server {
         }
     }
 
+    /// Create new TcpListener and return it, if port is set to 0 then in sequence search for unused port in range
+    async fn create_listener(port:u16,min_port:u16) -> Option<TcpListener> {
+        if port == 0 {
+            for port in min_port..65535 {
+                match TcpListener::bind(("::", port)).await {
+                    Ok(l) => return Some(l),
+                    Err(_) => continue
+                }
+            }
+            // Check the last port as loop does not include it
+            match TcpListener::bind(("::", 65535)).await {
+                Ok(l) => return Some(l),
+                Err(_) => return None
+            }
+        } else {
+            match TcpListener::bind(("::", port)).await {
+                Ok(l) => return Some(l),
+                Err(_) => {}
+            }
+        }
+        return None;
+    }
+
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
         let mut stream = BufReader::new(stream);
         if let Some(auth) = &self.auth {
@@ -84,9 +107,9 @@ impl Server {
                     return Ok(());
                 }
                 info!(?port, "new client");
-                let listener = match TcpListener::bind(("::", port)).await {
-                    Ok(listener) => listener,
-                    Err(_) => {
+                let listener = match Server::create_listener(port, self.min_port).await {
+                    Some(listener) => listener,
+                    None => {
                         warn!(?port, "could not bind to local port");
                         send_json(
                             &mut stream,
