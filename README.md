@@ -17,7 +17,7 @@ bore local 8000 --to bore.pub
 
 This will expose your local port at `localhost:8000` to the public internet at `bore.pub:<PORT>`, where the port number is assigned randomly.
 
-Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok](https://ngrok.io/), except `bore` is intended to be a highly efficient, unopinionated tool for forwarding TCP traffic that is simple to install and easy to self-host, with no frills attached.
+Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok](https://ngrok.io/), except `bore` is intended to be a highly efficient, unopinionated tool for forwarding TCP (or TCP-based like HTTP) traffic that is simple to install and easy to self-host, with no frills attached.
 
 (`bore` totals less than 400 lines of safe, async Rust code and is trivial to set up — just run a single binary for the client and server.)
 
