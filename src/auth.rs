@@ -1,12 +1,14 @@
 //! Auth implementation for bore client and server.
 
 use anyhow::{bail, ensure, Result};
+use futures::SinkExt;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
-use tokio::io::{AsyncBufRead, AsyncWrite};
+use tokio::net::TcpStream;
+use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use uuid::Uuid;
 
-use crate::shared::{recv_json_timeout, send_json, ClientMessage, ServerMessage};
+use crate::shared::{recv_json, recv_json_timeout, send_json, ClientMessage, ServerMessage};
 
 /// Wrapper around a MAC used for authenticating clients that have a secret.
 pub struct Authenticator(Hmac<Sha256>);
@@ -50,11 +52,13 @@ impl Authenticator {
     /// As the server, send a challenge to the client and validate their response.
     pub async fn server_handshake(
         &self,
-        stream: &mut (impl AsyncBufRead + AsyncWrite + Unpin),
+        stream: &mut Framed<TcpStream, AnyDelimiterCodec>,
     ) -> Result<()> {
         let challenge = Uuid::new_v4();
-        send_json(stream, ServerMessage::Challenge(challenge)).await?;
-        match recv_json_timeout(stream).await? {
+        stream
+            .send(&serde_json::to_string(&ServerMessage::Challenge(challenge)).unwrap())
+            .await?;
+        match recv_json(stream).await? {
             Some(ClientMessage::Authenticate(tag)) => {
                 ensure!(self.validate(&challenge, &tag), "invalid secret");
                 Ok(())
@@ -66,7 +70,7 @@ impl Authenticator {
     /// As the client, answer a challenge to attempt to authenticate with the server.
     pub async fn client_handshake(
         &self,
-        stream: &mut (impl AsyncBufRead + AsyncWrite + Unpin),
+        stream: &mut Framed<TcpStream, AnyDelimiterCodec>,
     ) -> Result<()> {
         let challenge = match recv_json_timeout(stream).await? {
             Some(ServerMessage::Challenge(challenge)) => challenge,

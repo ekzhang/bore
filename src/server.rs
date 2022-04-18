@@ -6,9 +6,10 @@ use std::time::Duration;
 
 use anyhow::Result;
 use dashmap::DashMap;
-use tokio::io::BufReader;
+
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{sleep, timeout};
+use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
@@ -64,7 +65,10 @@ impl Server {
     }
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
-        let mut stream = BufReader::new(stream);
+        let mut stream = Framed::new(
+            stream,
+            AnyDelimiterCodec::new_with_max_length(vec![0], vec![0], 200),
+        );
         if let Some(auth) = &self.auth {
             if let Err(err) = auth.server_handshake(&mut stream).await {
                 warn!(%err, "server handshake failed");
@@ -130,7 +134,7 @@ impl Server {
             Some(ClientMessage::Accept(id)) => {
                 info!(%id, "forwarding connection");
                 match self.conns.remove(&id) {
-                    Some((_, stream2)) => proxy(stream, stream2).await?,
+                    Some((_, stream2)) => proxy(stream.get_mut(), stream2).await?,
                     None => warn!(%id, "missing connection"),
                 }
                 Ok(())
