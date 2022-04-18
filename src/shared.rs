@@ -7,6 +7,7 @@ use futures::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{self, AsyncRead, AsyncWrite};
+
 use tokio::time::timeout;
 use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use tracing::trace;
@@ -14,6 +15,9 @@ use uuid::Uuid;
 
 /// TCP port used for control connections with the server.
 pub const CONTROL_PORT: u16 = 7835;
+
+/// TCP max message length server.
+pub const MAX_FRAME_LENGTH: usize = 200;
 
 /// Timeout for network connections and initial protocol messages.
 pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(3);
@@ -103,4 +107,14 @@ pub async fn send_json<T: Serialize, U: AsyncRead + AsyncWrite + Unpin>(
     trace!("sending json message");
     writer.send(serde_json::to_string(&msg)?).await?;
     Ok(())
+}
+
+///
+pub fn get_framed_stream<T: AsyncRead + AsyncWrite + Unpin>(
+    stream: T,
+) -> Framed<T, AnyDelimiterCodec> {
+    Framed::new(
+        stream,
+        AnyDelimiterCodec::new_with_max_length(vec![0], vec![0], MAX_FRAME_LENGTH),
+    )
 }

@@ -8,7 +8,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use uuid::Uuid;
 
-use crate::shared::{recv_json, recv_json_timeout, send_json, ClientMessage, ServerMessage};
+use crate::shared::{recv_json_timeout, send_json, ClientMessage, ServerMessage};
 
 /// Wrapper around a MAC used for authenticating clients that have a secret.
 pub struct Authenticator(Hmac<Sha256>);
@@ -58,7 +58,7 @@ impl Authenticator {
         stream
             .send(&serde_json::to_string(&ServerMessage::Challenge(challenge)).unwrap())
             .await?;
-        match recv_json(stream).await? {
+        match recv_json_timeout(stream).await? {
             Some(ClientMessage::Authenticate(tag)) => {
                 ensure!(self.validate(&challenge, &tag), "invalid secret");
                 Ok(())

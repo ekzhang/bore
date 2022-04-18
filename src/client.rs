@@ -12,8 +12,8 @@ use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{
-    proxy, recv_json, recv_json_timeout, send_json, ClientMessage, ServerMessage, CONTROL_PORT,
-    NETWORK_TIMEOUT,
+    get_framed_stream, proxy, recv_json, recv_json_timeout, send_json, ClientMessage,
+    ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT,
 };
 
 /// State structure for the client.
@@ -46,10 +46,7 @@ impl Client {
         port: u16,
         secret: Option<&str>,
     ) -> Result<Self> {
-        let mut stream = Framed::new(
-            connect_with_timeout(to, CONTROL_PORT).await?,
-            AnyDelimiterCodec::new_with_max_length(vec![0], vec![0], 200),
-        );
+        let mut stream = get_framed_stream(connect_with_timeout(to, CONTROL_PORT).await?);
         let auth = secret.map(Authenticator::new);
         if let Some(auth) = &auth {
             auth.client_handshake(&mut stream).await?;
@@ -87,8 +84,8 @@ impl Client {
     pub async fn listen(mut self) -> Result<()> {
         let mut conn = self.conn.take().unwrap();
         let this = Arc::new(self);
-        while let Ok(msg) = recv_json(&mut conn).await {
-            match msg {
+        loop {
+            match recv_json(&mut conn).await? {
                 Some(ServerMessage::Hello(_)) => warn!("unexpected hello"),
                 Some(ServerMessage::Challenge(_)) => warn!("unexpected challenge"),
                 Some(ServerMessage::Heartbeat) => (),
@@ -109,22 +106,19 @@ impl Client {
                 None => return Ok(()),
             }
         }
-        Ok(())
     }
 
     async fn handle_connection(&self, id: Uuid) -> Result<()> {
-        let mut remote_con = Framed::new(
-            connect_with_timeout(&self.to[..], CONTROL_PORT).await?,
-            AnyDelimiterCodec::new_with_max_length(vec![0], vec![0], 200),
-        );
+        let mut remote_conn =
+            get_framed_stream(connect_with_timeout(&self.to[..], CONTROL_PORT).await?);
         if let Some(auth) = &self.auth {
-            auth.client_handshake(&mut remote_con).await?;
+            auth.client_handshake(&mut remote_conn).await?;
         }
-        remote_con
+        remote_conn
             .send(&serde_json::to_string(&ClientMessage::Accept(id)).unwrap())
             .await?;
         let local_conn = connect_with_timeout(&self.local_host, self.local_port).await?;
-        proxy(local_conn, remote_con.get_mut()).await?;
+        proxy(local_conn, remote_conn.get_mut()).await?;
         Ok(())
     }
 }

@@ -6,16 +6,15 @@ use std::time::Duration;
 
 use anyhow::Result;
 use dashmap::DashMap;
-
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{sleep, timeout};
-use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{
-    proxy, recv_json_timeout, send_json, ClientMessage, ServerMessage, CONTROL_PORT,
+    get_framed_stream, proxy, recv_json_timeout, send_json, ClientMessage, ServerMessage,
+    CONTROL_PORT,
 };
 
 /// State structure for the server.
@@ -65,10 +64,7 @@ impl Server {
     }
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
-        let mut stream = Framed::new(
-            stream,
-            AnyDelimiterCodec::new_with_max_length(vec![0], vec![0], 200),
-        );
+        let mut stream = get_framed_stream(stream);
         if let Some(auth) = &self.auth {
             if let Err(err) = auth.server_handshake(&mut stream).await {
                 warn!(%err, "server handshake failed");
