@@ -4,7 +4,7 @@ use anyhow::{bail, ensure, Result};
 use futures::SinkExt;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use uuid::Uuid;
 
@@ -50,9 +50,9 @@ impl Authenticator {
     }
 
     /// As the server, send a challenge to the client and validate their response.
-    pub async fn server_handshake(
+    pub async fn server_handshake<T: AsyncRead + AsyncWrite + Unpin>(
         &self,
-        stream: &mut Framed<TcpStream, AnyDelimiterCodec>,
+        stream: &mut Framed<T, AnyDelimiterCodec>,
     ) -> Result<()> {
         let challenge = Uuid::new_v4();
         stream
@@ -68,9 +68,9 @@ impl Authenticator {
     }
 
     /// As the client, answer a challenge to attempt to authenticate with the server.
-    pub async fn client_handshake(
+    pub async fn client_handshake<T: AsyncRead + AsyncWrite + Unpin>(
         &self,
-        stream: &mut Framed<TcpStream, AnyDelimiterCodec>,
+        stream: &mut Framed<T, AnyDelimiterCodec>,
     ) -> Result<()> {
         let challenge = match recv_json_timeout(stream).await? {
             Some(ServerMessage::Challenge(challenge)) => challenge,

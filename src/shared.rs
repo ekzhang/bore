@@ -7,7 +7,6 @@ use futures::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{self, AsyncRead, AsyncWrite};
-use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use tracing::trace;
@@ -67,8 +66,8 @@ where
 }
 
 /// Read the next null-delimited JSON instruction from a stream.
-pub async fn recv_json<T: DeserializeOwned>(
-    reader: &mut Framed<TcpStream, AnyDelimiterCodec>,
+pub async fn recv_json<T: DeserializeOwned, U: AsyncRead + AsyncWrite + Unpin>(
+    reader: &mut Framed<U, AnyDelimiterCodec>,
 ) -> Result<Option<T>> {
     trace!("waiting to receive json message");
     if let Some(frame) = reader.next().await {
@@ -88,8 +87,8 @@ pub async fn recv_json<T: DeserializeOwned>(
 ///
 /// This is useful for parsing the initial message of a stream for handshake or
 /// other protocol purposes, where we do not want to wait indefinitely.
-pub async fn recv_json_timeout<T: DeserializeOwned>(
-    reader: &mut Framed<TcpStream, AnyDelimiterCodec>,
+pub async fn recv_json_timeout<T: DeserializeOwned, U: AsyncRead + AsyncWrite + Unpin>(
+    reader: &mut Framed<U, AnyDelimiterCodec>,
 ) -> Result<Option<T>> {
     timeout(NETWORK_TIMEOUT, recv_json(reader))
         .await
@@ -97,8 +96,8 @@ pub async fn recv_json_timeout<T: DeserializeOwned>(
 }
 
 /// Send a null-terminated JSON instruction on a stream.
-pub async fn send_json<T: Serialize>(
-    writer: &mut Framed<TcpStream, AnyDelimiterCodec>,
+pub async fn send_json<T: Serialize, U: AsyncRead + AsyncWrite + Unpin>(
+    writer: &mut Framed<U, AnyDelimiterCodec>,
     msg: T,
 ) -> Result<()> {
     trace!("sending json message");
