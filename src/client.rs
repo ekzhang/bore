@@ -3,23 +3,22 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
-use futures::SinkExt;
+use futures_util::SinkExt;
 
 use tokio::{net::TcpStream, time::timeout};
-use tokio_util::codec::{AnyDelimiterCodec, Framed};
 use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{
-    get_framed_stream, proxy, recv_json, recv_json_timeout, send_json, ClientMessage,
+    get_framed_stream, proxy, recv_json, recv_json_timeout, send_json, ClientMessage, Delimited,
     ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT,
 };
 
 /// State structure for the client.
 pub struct Client {
     /// Control connection to the server.
-    conn: Option<Framed<TcpStream, AnyDelimiterCodec>>,
+    conn: Option<Delimited<TcpStream>>,
 
     /// Destination address of the server.
     to: String,
@@ -114,11 +113,9 @@ impl Client {
         if let Some(auth) = &self.auth {
             auth.client_handshake(&mut remote_conn).await?;
         }
-        remote_conn
-            .send(&serde_json::to_string(&ClientMessage::Accept(id)).unwrap())
-            .await?;
+        send_json(&mut remote_conn, ClientMessage::Accept(id)).await?;
         let local_conn = connect_with_timeout(&self.local_host, self.local_port).await?;
-        proxy(local_conn, remote_conn.get_mut()).await?;
+        proxy(local_conn, remote_conn.into_inner()).await?;
         Ok(())
     }
 }
