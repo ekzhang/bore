@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use futures::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{self, AsyncRead, AsyncWrite};
@@ -16,11 +16,14 @@ use uuid::Uuid;
 /// TCP port used for control connections with the server.
 pub const CONTROL_PORT: u16 = 7835;
 
-/// TCP max message length server.
+/// Maxmium byte length for a JSON message over TCP
 pub const MAX_FRAME_LENGTH: usize = 200;
 
 /// Timeout for network connections and initial protocol messages.
 pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Null delimited Framed stream
+pub type Delimited<T> = Framed<T, AnyDelimiterCodec>;
 
 /// A message from the client on the control connection.
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,18 +73,15 @@ where
 }
 
 /// Read the next null-delimited JSON instruction from a stream.
-pub async fn recv_json<T: DeserializeOwned, U: AsyncRead + AsyncWrite + Unpin>(
-    reader: &mut Framed<U, AnyDelimiterCodec>,
+pub async fn recv_json<T: DeserializeOwned, U: AsyncRead + Unpin>(
+    reader: &mut Delimited<U>,
 ) -> Result<Option<T>> {
     trace!("waiting to receive json message");
-    if let Some(frame) = reader.next().await {
-        Ok(frame
-            .map(|op| {
-                serde_json::from_slice(&op.to_vec())
-                    .context("unable to parse message")
-                    .unwrap()
-            })
-            .context("frame error, invalid chunck length")?)
+    if let Some(next_message) = reader.next().await {
+        let byte_message = next_message.context("frame error, invalid byte length")?;
+        let serialized_obj =
+            serde_json::from_slice(&byte_message.to_vec()).context("unable to parse message")?;
+        Ok(serialized_obj)
     } else {
         Ok(None)
     }
@@ -91,8 +91,8 @@ pub async fn recv_json<T: DeserializeOwned, U: AsyncRead + AsyncWrite + Unpin>(
 ///
 /// This is useful for parsing the initial message of a stream for handshake or
 /// other protocol purposes, where we do not want to wait indefinitely.
-pub async fn recv_json_timeout<T: DeserializeOwned, U: AsyncRead + AsyncWrite + Unpin>(
-    reader: &mut Framed<U, AnyDelimiterCodec>,
+pub async fn recv_json_timeout<T: DeserializeOwned, U: AsyncRead + Unpin>(
+    reader: &mut Delimited<U>,
 ) -> Result<Option<T>> {
     timeout(NETWORK_TIMEOUT, recv_json(reader))
         .await
@@ -100,8 +100,8 @@ pub async fn recv_json_timeout<T: DeserializeOwned, U: AsyncRead + AsyncWrite + 
 }
 
 /// Send a null-terminated JSON instruction on a stream.
-pub async fn send_json<T: Serialize, U: AsyncRead + AsyncWrite + Unpin>(
-    writer: &mut Framed<U, AnyDelimiterCodec>,
+pub async fn send_json<T: Serialize, U: AsyncWrite + Unpin>(
+    writer: &mut Delimited<U>,
     msg: T,
 ) -> Result<()> {
     trace!("sending json message");
@@ -109,10 +109,9 @@ pub async fn send_json<T: Serialize, U: AsyncRead + AsyncWrite + Unpin>(
     Ok(())
 }
 
-///
-pub fn get_framed_stream<T: AsyncRead + AsyncWrite + Unpin>(
-    stream: T,
-) -> Framed<T, AnyDelimiterCodec> {
+/// Transforms stream interface into null byte Delimited Stream
+/// with safe read/write
+pub fn get_framed_stream<T: AsyncRead + AsyncWrite + Unpin>(stream: T) -> Delimited<T> {
     Framed::new(
         stream,
         AnyDelimiterCodec::new_with_max_length(vec![0], vec![0], MAX_FRAME_LENGTH),

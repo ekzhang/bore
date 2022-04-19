@@ -130,7 +130,7 @@ impl Server {
             Some(ClientMessage::Accept(id)) => {
                 info!(%id, "forwarding connection");
                 match self.conns.remove(&id) {
-                    Some((_, stream2)) => proxy(stream.get_mut(), stream2).await?,
+                    Some((_, stream2)) => proxy(stream.into_inner(), stream2).await?,
                     None => warn!(%id, "missing connection"),
                 }
                 Ok(())

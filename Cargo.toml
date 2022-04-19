@@ -28,9 +28,8 @@ tokio = { version = "1.17.0", features = ["rt-multi-thread", "io-util", "macros"
 tracing = "0.1.32"
 tracing-subscriber = "0.3.10"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-tokio-util = {version = "*", features = ["codec"]}
-futures = "0.3.21"
-# bytes= "1.1.0"
+tokio-util = {version = "0.7.1", features = ["codec"]}
+futures-util = {version = "0.3.21", features = ["sink"]}
 
 [dev-dependencies]
 lazy_static = "1.4.0"
