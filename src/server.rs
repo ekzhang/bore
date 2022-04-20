@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use dashmap::DashMap;
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{sleep, timeout};
 use tracing::{info, info_span, warn, Instrument};
@@ -130,7 +131,11 @@ impl Server {
             Some(ClientMessage::Accept(id)) => {
                 info!(%id, "forwarding connection");
                 match self.conns.remove(&id) {
-                    Some((_, stream2)) => proxy(stream.into_inner(), stream2).await?,
+                    Some((_, mut stream2)) => {
+                        let buffered_data = &&stream.read_buffer().to_vec();
+                        stream2.write_all(buffered_data).await?; // mostly of the cases, this will be empty
+                        proxy(stream.into_inner(), stream2).await?
+                    },
                     None => warn!(%id, "missing connection"),
                 }
                 Ok(())
