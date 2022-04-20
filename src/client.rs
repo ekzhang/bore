@@ -115,6 +115,8 @@ impl Client {
         }
         send_json(&mut remote_conn, ClientMessage::Accept(id)).await?;
         let local_conn = connect_with_timeout(&self.local_host, self.local_port).await?;
+        let buffered_data = &&remote_conn.read_buffer().to_vec();
+        local_conn.write_all(buffered_data).await?; // mostly of the cases, this will be empty
         proxy(local_conn, remote_conn.into_inner()).await?;
         Ok(())
     }
