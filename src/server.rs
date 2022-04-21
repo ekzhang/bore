@@ -84,7 +84,7 @@ impl Server {
                     return Ok(());
                 }
                 info!(?port, "new client");
-                let listener = match TcpListener::bind(("::", port)).await {
+                let listener = match TcpListener::bind(("0.0.0.0", port)).await {
                     Ok(listener) => listener,
                     Err(_) => {
                         warn!(?port, "could not bind to local port");

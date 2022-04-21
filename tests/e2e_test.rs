@@ -26,7 +26,7 @@ async fn spawn_client(secret: Option<&str>) -> Result<(TcpListener, SocketAddr)>
     let listener = TcpListener::bind("localhost:0").await?;
     let local_port = listener.local_addr()?.port();
     let client = Client::new("localhost", local_port, "localhost", 0, secret).await?;
-    let remote_addr = ([0, 0, 0, 0], client.remote_port()).into();
+    let remote_addr = ([127, 0, 0, 1], client.remote_port()).into();
     tokio::spawn(client.listen());
     Ok((listener, remote_addr))
 }
