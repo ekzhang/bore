@@ -3,15 +3,21 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use futures_util::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{self, AsyncRead, AsyncWrite};
+
 use tokio::time::timeout;
+use tokio_util::codec::{AnyDelimiterCodec, Framed, FramedParts};
 use tracing::trace;
 use uuid::Uuid;
 
 /// TCP port used for control connections with the server.
 pub const CONTROL_PORT: u16 = 7835;
+
+/// Maxmium byte length for a JSON frame in the stream.
+pub const MAX_FRAME_LENGTH: usize = 256;
 
 /// Timeout for network connections and initial protocol messages.
 pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(3);
@@ -48,6 +54,52 @@ pub enum ServerMessage {
     Error(String),
 }
 
+/// Transport stream with JSON frames delimited by null characters.
+pub struct Delimited<U>(Framed<U, AnyDelimiterCodec>);
+
+impl<U: AsyncRead + AsyncWrite + Unpin> Delimited<U> {
+    /// Construct a new delimited stream.
+    pub fn new(stream: U) -> Self {
+        let codec = AnyDelimiterCodec::new_with_max_length(vec![0], vec![0], MAX_FRAME_LENGTH);
+        Self(Framed::new(stream, codec))
+    }
+
+    /// Read the next null-delimited JSON instruction from a stream.
+    pub async fn recv<T: DeserializeOwned>(&mut self) -> Result<Option<T>> {
+        trace!("waiting to receive json message");
+        if let Some(next_message) = self.0.next().await {
+            let byte_message = next_message.context("frame error, invalid byte length")?;
+            let serialized_obj = serde_json::from_slice(&byte_message.to_vec())
+                .context("unable to parse message")?;
+            Ok(serialized_obj)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Read the next null-delimited JSON instruction, with a default timeout.
+    ///
+    /// This is useful for parsing the initial message of a stream for handshake or
+    /// other protocol purposes, where we do not want to wait indefinitely.
+    pub async fn recv_timeout<T: DeserializeOwned>(&mut self) -> Result<Option<T>> {
+        timeout(NETWORK_TIMEOUT, self.recv())
+            .await
+            .context("timed out waiting for initial message")?
+    }
+
+    /// Send a null-terminated JSON instruction on a stream.
+    pub async fn send<T: Serialize>(&mut self, msg: T) -> Result<()> {
+        trace!("sending json message");
+        self.0.send(serde_json::to_string(&msg)?).await?;
+        Ok(())
+    }
+
+    /// Consume this object, returning current buffers and the inner transport.
+    pub fn into_parts(self) -> FramedParts<U, AnyDelimiterCodec> {
+        self.0.into_parts()
+    }
+}
+
 /// Copy data mutually between two read/write streams.
 pub async fn proxy<S1, S2>(stream1: S1, stream2: S2) -> io::Result<()>
 where
@@ -60,43 +112,5 @@ where
         res = io::copy(&mut s1_read, &mut s2_write) => res,
         res = io::copy(&mut s2_read, &mut s1_write) => res,
     }?;
-    Ok(())
-}
-
-/// Read the next null-delimited JSON instruction from a stream.
-pub async fn recv_json<T: DeserializeOwned>(
-    reader: &mut (impl AsyncBufRead + Unpin),
-    buf: &mut Vec<u8>,
-) -> Result<Option<T>> {
-    trace!("waiting to receive json message");
-    buf.clear();
-    reader.read_until(0, buf).await?;
-    if buf.is_empty() {
-        return Ok(None);
-    }
-    if buf.last() == Some(&0) {
-        buf.pop();
-    }
-    Ok(serde_json::from_slice(buf).context("failed to parse JSON")?)
-}
-
-/// Read the next null-delimited JSON instruction, with a default timeout.
-///
-/// This is useful for parsing the initial message of a stream for handshake or
-/// other protocol purposes, where we do not want to wait indefinitely.
-pub async fn recv_json_timeout<T: DeserializeOwned>(
-    reader: &mut (impl AsyncBufRead + Unpin),
-) -> Result<Option<T>> {
-    timeout(NETWORK_TIMEOUT, recv_json(reader, &mut Vec::new()))
-        .await
-        .context("timed out waiting for initial message")?
-}
-
-/// Send a null-terminated JSON instruction on a stream.
-pub async fn send_json<T: Serialize>(writer: &mut (impl AsyncWrite + Unpin), msg: T) -> Result<()> {
-    trace!("sending json message");
-    let msg = serde_json::to_vec(&msg)?;
-    writer.write_all(&msg).await?;
-    writer.write_all(&[0]).await?;
     Ok(())
 }
