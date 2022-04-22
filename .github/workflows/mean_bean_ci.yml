@@ -1,0 +1,123 @@
+name: Mean Bean CI
+
+on: [push, pull_request]
+
+jobs:
+  install-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          fetch-depth: 50
+
+      - uses: XAMPPRocky/get-github-release@v1
+        id: cross
+        with:
+          owner: rust-embedded
+          repo: cross
+          matches: ${{ matrix.platform }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v1
+        with:
+          name: cross-${{ matrix.platform }}
+          path: ${{ steps.cross.outputs.install_path }}
+    strategy:
+      matrix:
+        platform: [linux-musl]
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        channel: [stable]
+        target:
+          - x86_64-apple-darwin
+
+    steps:
+      - name: Setup | Checkout
+        uses: actions/checkout@v2
+      - name: Setup | Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+          target: ${{ matrix.target }}
+      - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --target ${{ matrix.target }}
+          use-cross: false
+
+  linux:
+    runs-on: ubuntu-latest
+    needs: install-cross
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+
+      - name: Download Cross
+        uses: actions/download-artifact@v1
+        with:
+          name: cross-linux-musl
+          path: /tmp/
+      - run: chmod +x /tmp/cross
+      - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
+      - run: ci/build.bash /tmp/cross ${{ matrix.target }}
+        # These targets have issues with being tested so they are disabled
+        # by default. You can try disabling to see if they work for
+        # your project.
+      - run: ci/test.bash /tmp/cross ${{ matrix.target }}
+        if: |
+          !contains(matrix.target, 'android') &&
+          !contains(matrix.target, 'bsd') &&
+          !contains(matrix.target, 'solaris') &&
+          matrix.target != 'armv5te-unknown-linux-musleabi' &&
+          matrix.target != 'sparc64-unknown-linux-gnu'
+
+    strategy:
+      fail-fast: true
+      matrix:
+        channel: [stable]
+        target:
+          - arm-unknown-linux-gnueabi
+          - armv7-unknown-linux-gnueabihf
+          - i686-unknown-linux-musl
+          - x86_64-unknown-linux-musl
+
+  windows:
+    runs-on: windows-latest
+    # Windows technically doesn't need this, but if we don't block windows on it
+    # some of the windows jobs could fill up the concurrent job queue before
+    # one of the install-cross jobs has started, so this makes sure all
+    # artifacts are downloaded first.
+    needs: install-cross
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 50
+      - run: ci/set_rust_version.bash ${{ matrix.channel }} ${{ matrix.target }}
+        shell: bash
+      - run: ci/build.bash cargo ${{ matrix.target }}
+        shell: bash
+      - run: ci/test.bash cargo ${{ matrix.target }}
+        shell: bash
+
+    strategy:
+      fail-fast: true
+      matrix:
+        channel: [stable]
+        target:
+          # MSVC
+          - i686-pc-windows-msvc
+          - x86_64-pc-windows-msvc
+          # GNU: You typically only need to test Windows GNU if you're
+          # specifically targetting it, and it can cause issues with some
+          # dependencies if you're not so it's disabled by self.
+          # - i686-pc-windows-gnu
+          # - x86_64-pc-windows-gnu

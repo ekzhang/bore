@@ -44,4 +44,4 @@ jobs:
           toolchain: stable
           components: clippy
 
-      - run: cargo clippy
+      - run: cargo clippy -- -D warnings
