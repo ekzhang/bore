@@ -62,26 +62,25 @@ impl Server {
     }
 
     /// Create new TcpListener and return it, if port is set to 0 then in sequence search for unused port in range
-    async fn create_listener(port:u16,min_port:u16) -> Option<TcpListener> {
+    async fn create_listener(port: u16, min_port: u16) -> Option<TcpListener> {
         if port == 0 {
             for port in min_port..65535 {
                 match TcpListener::bind(("0.0.0.0", port)).await {
                     Ok(l) => return Some(l),
-                    Err(_) => continue
+                    Err(_) => continue,
                 }
             }
             // Check the last port as loop does not include it
             match TcpListener::bind(("0.0.0.0", 65535)).await {
-                Ok(l) => return Some(l),
-                Err(_) => return None
+                Ok(l) => Some(l),
+                Err(_) => None,
             }
         } else {
             match TcpListener::bind(("0.0.0.0", port)).await {
-                Ok(l) => return Some(l),
-                Err(_) => {}
+                Ok(l) => Some(l),
+                Err(_) => None,
             }
         }
-        return None;
     }
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
