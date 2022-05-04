@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use bore_cli::{client::Client, server::Server};
+use bore_cli::{client::Client, server::Server, shared::CONTROL_PORT};
 use lazy_static::lazy_static;
 use rstest::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -26,7 +26,7 @@ async fn spawn_client(secret: Option<&str>) -> Result<(TcpListener, SocketAddr)>
     let listener = TcpListener::bind("localhost:0").await?;
     let local_port = listener.local_addr()?.port();
     let client = Client::new("localhost", local_port, "localhost", 0, secret).await?;
-    let remote_addr = ([0, 0, 0, 0], client.remote_port()).into();
+    let remote_addr = ([127, 0, 0, 1], client.remote_port()).into();
     tokio::spawn(client.listen());
     Ok((listener, remote_addr))
 }
@@ -98,4 +98,22 @@ async fn invalid_address() -> Result<()> {
         check_address("malformed !$uri$%", true),
     )?;
     Ok(())
+}
+
+#[tokio::test]
+async fn very_long_frame() -> Result<()> {
+    let _guard = SERIAL_GUARD.lock().await;
+
+    spawn_server(None).await;
+    let mut attacker = TcpStream::connect(("localhost", CONTROL_PORT)).await?;
+
+    // Slowly send a very long frame.
+    for _ in 0..10 {
+        let result = attacker.write_all(&[42u8; 100000]).await;
+        if result.is_err() {
+            return Ok(());
+        }
+        time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("did not exit after a 1 MB frame");
 }

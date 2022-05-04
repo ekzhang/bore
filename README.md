@@ -8,7 +8,7 @@ A modern, simple TCP tunnel in Rust that exposes local ports to a remote server,
 ![Video demo](https://i.imgur.com/vDeGsmx.gif)
 
 ```shell
-# Installation (requires Rust)
+# Installation (requires Rust, see alternatives below)
 cargo install bore-cli
 
 # On your local machine
@@ -23,7 +23,9 @@ Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok]
 
 ## Installation
 
-You can build the `bore` CLI command from source using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager. This command installs the `bore` binary at a user-accessible path.
+The easiest way to install bore is from prebuilt binaries. These are available on the [releases page](https://github.com/ekzhang/bore/releases) for macOS, Windows, and Linux. Just unzip the appropriate file for your platform and move the bore executable into a folder on your PATH.
+
+You also can build `bore` from source using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager. This command installs the `bore` binary at a user-accessible path.
 
 ```shell
 cargo install bore-cli
@@ -52,7 +54,7 @@ You can optionally pass in a `--port` option to pick a specific port on the remo
 The full options are shown below.
 
 ```shell
-bore-local 0.3.0
+bore-local 0.4.0
 Starts a local proxy to the remote server
 
 USAGE:
@@ -83,7 +85,7 @@ That's all it takes! After the server starts running at a given address, you can
 The full options for the `bore server` command are shown below.
 
 ```shell
-bore-server 0.3.0
+bore-server 0.4.0
 Runs the remote proxy server
 
 USAGE:
