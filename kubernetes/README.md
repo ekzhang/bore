@@ -10,7 +10,7 @@ The steps below assume some basic knowledge of Kubernetes concepts and expertise
 
 # Example architecture
 
-
+![Example architcture](bore-on-kubernetes.png)
 
 ## Components
 
