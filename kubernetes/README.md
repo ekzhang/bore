@@ -20,7 +20,7 @@ The steps below assume some basic knowledge of Kubernetes concepts and expertise
     * `2222` - SSH
     * `443` - HTTPS
     * `80` - HTTP
-* A single node Kubernetes cluster running on a Linux machine
+* A single-node Kubernetes cluster running on a Linux machine
 * `bore local` - deployment on the cluster and routing traffic
   * `6443` - to the API server
   * `2222` - to the node's SSH daemon
@@ -262,7 +262,62 @@ When your Internet Service Provider rotates your public IP address (mine does, e
 
 ## Use cases
 
-1. Access a website hosted on the cluster
-2. Manage the cluster from outside
-4. SSH into the Kubernetes node
-5. Use your own git server hosted on the cluster
+### Access a website hosted on the cluster
+
+This setup assumes that you have an Ingress Controller with a Load Balancer. It exposes ports `80` and `443` on the Load Balancer. The Ingress controller routes the traffic to the website `Service` and to the `Pod` behind.
+You'll need 2 containers in the `bore` `Deployment` with different port settings:
+* HTTP
+  * `$PORT: 80`
+  * `REDIRECT_TO: <Load Balancer IP>`
+  * `args: ["local", "$(PORT)", "-l", "$(REDIRECT_TO)", "-s", "$(BORE_SECRET)", "-t", "$(SERVER)", "-p", "$(PORT)"]`
+* HTTPS
+  * `$PORT: 443`
+  * `REDIRECT_TO: <Load Balancer IP>`
+  * `args: ["local", "$(PORT)", "-l", "$(REDIRECT_TO)", "-s", "$(BORE_SECRET)", "-t", "$(SERVER)", "-p", "$(PORT)"]`
+
+### Manage the cluster from outside
+
+To manage a cluster either with [kubectl](https://kubernetes.io/docs/reference/kubectl/) or with a dashboard application like [k9s](https://k9scli.io) or [Lens](https://k8slens.dev) you need axcess to the API server. The Kubernetes API server is accessible on port `6443`. This traffic doesn't go through the Ingress Controller, so it has to be redirected to the IP address of the master node.
+  * `$PORT: 6443`
+  * `REDIRECT_TO: <Master Node IP>`
+  * `args: ["local", "$(PORT)", "-l", "$(REDIRECT_TO)", "-s", "$(BORE_SECRET)", "-t", "$(SERVER)", "-p", "$(PORT)"]`
+  
+### SSH into a Kubernetes node
+
+The `bore server` probably has its own SSH daemon running, hence port 22 is most likely already taken. Therefore pick another available port for the tunnel that you can redirect to the node's SSH port. The flow is something like this:
+  `bore server:2222` -> `bore local:2222` -> `node:22`
+
+  * `$PORT: 22`
+  * `REDIRECT_TO: <Node IP>`
+  * `args: ["local", "$(PORT)", "-l", "$(REDIRECT_TO)", "-s", "$(BORE_SECRET)", "-t", "$(SERVER)", "-p", "2222"]`
+  
+### Use your own Git server hosted on the cluster
+
+This is a rather unusual scenario because a Git server like [Gitea](https://gitea.io/en-us/) exposes its own SSH port via its `Service`. And that port is not available through the Ingress Controller nor it's exposed on the node by default. The Ingress Controller can't do this so you'll have to find a way to make the `Service` port available on the Node. The answer is `NodePort` which comes with limitations.
+  * The exposed port has to be higher than `30000`
+  * The Git server `Pod` behind the `Service` will only be available on a single node. This is not a problem in case of a single-node cluster. If you have a multi-node cluster however, then you have to make sure that the `Pod` will always start on the same node otherwise you `bore` tunnel might not work after a restart (because the nodes have different IP addresses). So you'll have to "stick" the Git server `Pod` to the node using [NodeAffinity](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes-using-node-affinity/).
+
+* Configure the `Service` with a `NodePort`
+  
+  ```yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: gitea-ssh
+    namespace: gitea
+  spec:
+    type: NodePort
+    ports:
+    - name: ssh
+      port: 22
+      targetPort: 22
+      nodePort: 32222
+      protocol: TCP
+    selector:
+      app: gitea
+  ```
+* And set up the `bore` tunnel accordingly
+  
+  * `$PORT: 32222`
+  * `REDIRECT_TO: <Node IP>`
+  * `args: ["local", "$(PORT)", "-l", "$(REDIRECT_TO)", "-s", "$(BORE_SECRET)", "-t", "$(SERVER)", "-p", "$(PORT)"]`
