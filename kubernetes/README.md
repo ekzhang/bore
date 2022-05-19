@@ -1,12 +1,12 @@
 # How to run bore on a Kubernetes cluster?
 
-Having a Kubernetes cluster in the home network is not that uncommon nowadays. Running it behind NAT and exposing various services to the outer world however comes with its own set of networking problems. Especially when you can't (or don't want to) assign a fixed public IP address to the router and your ISP rotates the addresses among the customers regularly.
+Having a Kubernetes cluster in the home network is not that uncommon nowadays. Running it behind NAT and exposing various services to the outer world however, comes with its own set of networking problems. Especially, when you can't (or don't want to) assign a fixed public IP address to the router and your ISP rotates the addresses among the customers regularly.
 
 Typical use cases can be hosting your own website, a git server or you just simply managing the cluster from the outside. `bore` can perfectly handle these scenarios.
 
 Since [v0.2.3](https://github.com/ekzhang/bore/releases/tag/v0.2.3) we can run `bore` in a Docker container. And if we can run something in a container, chances are we can run it on Kubernetes too.
 
-The steps below assume some basic knowledge of Kubernetes concepts and expertise in working with manifest files, as well as using [kubectl](https://kubernetes.io/docs/reference/kubectl/). The instructions focus on `bore local` as `bore server` requires opening TCP ports dynamically, which is a hard sell on Kubernetes. You can always use the public `bore.pub` server or also can set your own server up at your favorite cloud provider without breaking the bank. I run mine at AWS on a `t4g.nano` spot instance and the monthly cost is around 1 USD. The instructions won't cover setting up the cluster or the various hosted applications either.
+The steps below assume some basic knowledge of Kubernetes concepts and expertise in working with manifest files, as well as using [kubectl](https://kubernetes.io/docs/reference/kubectl/). The instructions focus on `bore local` as `bore server` requires opening TCP ports dynamically, which is a hard sell on Kubernetes. You can always use the public `bore.pub` server or also can set your own server up at your favorite cloud provider without breaking the bank. I run mine at AWS, on a `t4g.nano` spot instance and the monthly cost is around 1 USD. The instructions won't cover setting up the cluster or the various hosted applications either.
 
 # Example architecture
 
@@ -15,20 +15,20 @@ The steps below assume some basic knowledge of Kubernetes concepts and expertise
 ## Components
 
 * `my.bore.server` - out in the wild, exposing TCP ports
-    * 7835 - bore control port
-    * 6443 - Kubernetes API server
-    * 2222 - SSH
-    * 443 - HTTPS
-    * 80 - HTTP
+    * `7835` - bore control port
+    * `6443` - Kubernetes API server
+    * `2222` - SSH
+    * `443` - HTTPS
+    * `80` - HTTP
 * A single node Kubernetes cluster running on a Linux machine
 * `bore local` - deployment on the cluster and routing traffic
-  * 6443 - to the API server
-  * 2222 - to the node's SSH daemon
-  * 80 and 443 - to the ingress controller
+  * `6443` - to the API server
+  * `2222` - to the node's SSH daemon
+  * `80` and `443` - to the ingress controller
 
 ## bore setup
 
-* Create a namespace
+* Create a `Namespace`
 
   ```yaml
   kind: Namespace
@@ -37,7 +37,7 @@ The steps below assume some basic knowledge of Kubernetes concepts and expertise
     name: bore
   ```
 
-* Create a Kubernetes secret for the shared `$BORE_SECRET`
+* Create a `Secret` to store `BORE_SECRET`
 
   ```yaml
   kind: Secret
@@ -50,7 +50,7 @@ The steps below assume some basic knowledge of Kubernetes concepts and expertise
     BORE_SECRET: <base64 encoded secret>
   ```
 
-* Create the bore deployment. I's a multi-container deployment, each container runs a single tunnel
+* Create the `Deployment`. I's a multi-container deployment, each container runs a single tunnel. Create as many tunnels as you need.
 
   ```yaml
   apiVersion: apps/v1
@@ -91,21 +91,21 @@ The steps below assume some basic knowledge of Kubernetes concepts and expertise
                 key: BORE_SECRET
           command: ["./bore"]
           args: ["local", "$(PORT)", "-l", "$(REDIRECT_TO)", "-s", "$(BORE_SECRET)", "-t", "$(SERVER)", "-p", "$(PORT)"]
-        - name: container-2
+        - name: bore-https # container 2
           ...
   ```
 
-* Important comments on the deployment
+* Comments on the `Deployment`
   * 1 replica is all you need.
-  * Set the deployment strategy to `Recreate`. What it does it kills the Pod first then creates the new one only afterwards. It will be important when restarting the Pod from a cron job. More about this later.
+  * Set the deployment strategy to `Recreate`. What it does it kills the `Pod` first then creates the new one only afterwards. This will be important when restarting the `Pod` from a cron job. More about this later.
   * `bore` doesn't need root privileges, hence the `securityContext` settings.
-  * The `REDIRECT_TO` environment variable contains the external IP of the Load Balancer or the Kubernetes node that the pod runs on. You'll find a bit more detailed explanation in the use cases section.
+  * The `REDIRECT_TO` environment variable contains the external IP of the Load Balancer of the Kubernetes node that the `pod` runs on. You'll find a bit more detailed explanation in the use cases section.
 
 ## Restarting bore
 
-When your Internet Service Provider rotates your public IP address (mine does, every 24 hours) you'll loose connection to your home network because `bore local` can't reconnect to the server. In this case the Pod has to be restarted. The workaround below runs as a Kubernetes `CronJob`. It checks for the router's public IP address. If it differs from the stored value then the job assumes that the IP was rotated, so it restarts the Pod. If the deployment strategy is not `Recreate` then the Kubernetes scheduler tries to start the new Pod first and shuts the old down only afterwards. But in this case the old Pod still uses the TCP ports therefore the new Pod will never come alive.
+When your Internet Service Provider rotates your public IP address (mine does, every 24 hours) you'll loose connection to your home network because as of today `bore local` can't reconnect to the server. In this case the `Pod` has to be restarted. The workaround below runs as a Kubernetes `CronJob`. It checks for the router's public IP address. If it differs from the stored value in a `ConfigMap` then the job assumes that the IP address was rotated, so it restarts the `Pod` and updates the `ConfigMap` with the new value. If the deployment strategy is not `Recreate` then the Kubernetes scheduler tries to start the new `Pod` first and shuts the old down only afterwards. But in this case the old `Pod` still uses the TCP ports therefore the new `Pod` will never come alive.
 
-* Create a `ConfigMap` containing your current public IP address
+* Create a `ConfigMap` with your current public IP address
 
   ```yaml
   apiVersion: v1
@@ -117,7 +117,7 @@ When your Internet Service Provider rotates your public IP address (mine does, e
     external-ip: 1.1.1.1
   ```
 
-* Create a ServiceAccount that the job will use
+* Create a `ServiceAccount` that the job will use
 
   ```yaml
   kind: ServiceAccount
@@ -127,7 +127,7 @@ When your Internet Service Provider rotates your public IP address (mine does, e
     namespace: bore
   ```
 
-* Create a Role that can restart pods and update config maps in the namespace
+* Create a `Role` that can restart the `Pod` and update the `ConfigMap` in the namespace
 
   ```yaml
   apiVersion: rbac.authorization.k8s.io/v1
@@ -144,7 +144,7 @@ When your Internet Service Provider rotates your public IP address (mine does, e
       verbs: ["*"]
   ```
 
-* Bind the Role to the ServiceAccount
+* Bind the `Role` to the `ServiceAccount`
 
   ```yaml
   kind: RoleBinding
@@ -162,7 +162,7 @@ When your Internet Service Provider rotates your public IP address (mine does, e
       namespace: bore
   ```
 
-* Create another ConfigMap that contains the restart script and will be mounted into the CronJob as `/script/restart-bore-pods.sh`
+* Create another `ConfigMap` that contains the restart script and will be mounted into the `CronJob` as `/script/restart-bore-pods.sh`
 
   ```yaml
   kind: ConfigMap
@@ -184,7 +184,7 @@ When your Internet Service Provider rotates your public IP address (mine does, e
       if [[ -z "${MY_EXT_IP}" ]] 
       then
           echo "error getting external IP"
-          exit 1
+          exit 0
       else
           echo "external IP: ${MY_EXT_IP}"
       fi
@@ -195,7 +195,7 @@ When your Internet Service Provider rotates your public IP address (mine does, e
       if [[ -z "${STORED_EXT_IP}" ]]
       then
           echo "error getting stored IP"
-          exit 1
+          exit 0
       else
           echo "stored IP: ${STORED_EXT_IP}"
       fi
@@ -203,11 +203,11 @@ When your Internet Service Provider rotates your public IP address (mine does, e
       if [[ ${MY_EXT_IP} != ${STORED_EXT_IP} ]]
       then
           echo "IPs don't match, restarting bore Pods..."
-          for POD in $(kubectl get pod -n $NAMESPACE --no-headers=true | awk -F" " '{print $1}' | xargs )
+          for `POD` in $(kubectl get `pod` -n $NAMESPACE --no-headers=true | awk -F" " '{print $1}' | xargs )
           do  
-              if [[ $POD =~ $BORE_POD_NAME_PATTERN ]]
+              if [[ $`POD` =~ $BORE_POD_NAME_PATTERN ]]
               then
-                kubectl delete pod $POD -n $NAMESPACE
+                kubectl delete `pod` $`POD` -n $NAMESPACE
               fi
           done
           echo "updating ConfigMap..."
@@ -217,7 +217,7 @@ When your Internet Service Provider rotates your public IP address (mine does, e
       fi
   ```
 
-* Deploy the CronJob
+* Deploy the `CronJob`
 
   ```yaml
   kind: CronJob
@@ -255,9 +255,10 @@ When your Internet Service Provider rotates your public IP address (mine does, e
                   defaultMode: 0777
   ```
 
-  * Comments on the CronJob
-    * Pick your schedule, I found the 5 mins checking interval good enough
-    * You can use any image for the conatiner. The restart script needs `bash`, `curl` and `kubectl`.
+  * Comments on the `CronJob`
+    * Pick your schedule. I found the 5 mins checking interval good enough.
+    * You can use any image for the conatiner. The restart script only needs `bash`, `curl` and `kubectl`.
+    * Use the `BORE_POD_NAME_PATTERN` variable in the script to define which `Pod` to kill. This way you can avoid the job killing itself and being instantly recreated by the cluster scheduler, thus getting into an infinite loop.
 
 ## Use cases
 
