@@ -23,7 +23,13 @@ Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok]
 
 ## Installation
 
-The easiest way to install bore is from prebuilt binaries. These are available on the [releases page](https://github.com/ekzhang/bore/releases) for macOS, Windows, and Linux. Just unzip the appropriate file for your platform and move the bore executable into a folder on your PATH.
+If you're on macOS, `bore` is packaged as a Homebrew formula.
+
+```shell
+brew install ekzhang/bore/bore
+```
+
+Otherwise, the easiest way to install bore is from prebuilt binaries. These are available on the [releases page](https://github.com/ekzhang/bore/releases) for macOS, Windows, and Linux. Just unzip the appropriate file for your platform and move the `bore` executable into a folder on your PATH.
 
 You also can build `bore` from source using [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager. This command installs the `bore` binary at a user-accessible path.
 
