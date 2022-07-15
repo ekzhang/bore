@@ -22,7 +22,7 @@ enum Command {
         local_host: String,
 
         /// Address of the remote server to expose local ports to.
-        #[clap(short, long)]
+        #[clap(short, long, env = "BORE_SERVER")]
         to: String,
 
         /// Optional port on the remote server to select.
