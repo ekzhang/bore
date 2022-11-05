@@ -114,3 +114,7 @@ where
     }?;
     Ok(())
 }
+
+/// Wrapper Trait to switch between plain tcp and tls.
+pub trait StreamTrait: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> StreamTrait for T {}

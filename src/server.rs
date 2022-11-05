@@ -9,11 +9,12 @@ use dashmap::DashMap;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{sleep, timeout};
+use tokio_rustls::TlsAcceptor;
 use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
+use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, StreamTrait, CONTROL_PORT};
 
 /// State structure for the server.
 pub struct Server {
@@ -25,15 +26,24 @@ pub struct Server {
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
+
+    /// Optional tls configuration
+    tls: Option<TlsAcceptor>,
 }
 
 impl Server {
     /// Create a new server with a specified minimum port number.
     pub fn new(min_port: u16, secret: Option<&str>) -> Self {
+        Server::new_with_tls(min_port, secret, None)
+    }
+
+    /// Create a new server with a specified minimum port number and tls is configurable.
+    pub fn new_with_tls(min_port: u16, secret: Option<&str>, tls: Option<TlsAcceptor>) -> Self {
         Server {
             min_port,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
+            tls,
         }
     }
 
@@ -47,6 +57,13 @@ impl Server {
         loop {
             let (stream, addr) = listener.accept().await?;
             let this = Arc::clone(&this);
+            let stream: Box<dyn StreamTrait> = match &this.tls {
+                Some(acceptor) => {
+                    let stream = acceptor.accept(stream).await?;
+                    Box::new(stream)
+                }
+                None => Box::new(stream),
+            };
             tokio::spawn(
                 async move {
                     info!("incoming connection");
@@ -61,7 +78,7 @@ impl Server {
         }
     }
 
-    async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
+    async fn handle_connection(&self, stream: Box<dyn StreamTrait>) -> Result<()> {
         let mut stream = Delimited::new(stream);
         if let Some(auth) = &self.auth {
             if let Err(err) = auth.server_handshake(&mut stream).await {
