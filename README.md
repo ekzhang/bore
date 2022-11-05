@@ -70,12 +70,13 @@ ARGS:
     <LOCAL_PORT>    The local port to expose
 
 OPTIONS:
-    -h, --help                 Print help information
-    -l, --local-host <HOST>    The local host to expose [default: localhost]
-    -p, --port <PORT>          Optional port on the remote server to select [default: 0]
-    -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
-    -t, --to <TO>              Address of the remote server to expose local ports to
-    -V, --version              Print version information
+        --control-port <CONTROL_PORT>    Listen of the remote proxy server [default: 7835]
+    -h, --help                           Print help information
+    -l, --local-host <HOST>              The local host to expose [default: localhost]
+    -p, --port <PORT>                    Optional port on the remote server to select [default: 0]
+    -s, --secret <SECRET>                Optional secret for authentication [env: BORE_SECRET]
+    -t, --to <TO>                        Address of the remote server to expose local ports to
+    -V, --version                        Print version information
 ```
 
 ### Self-Hosting
@@ -98,10 +99,11 @@ USAGE:
     bore server [OPTIONS]
 
 OPTIONS:
-    -h, --help                   Print help information
-        --min-port <MIN_PORT>    Minimum TCP port number to accept [default: 1024]
-    -s, --secret <SECRET>        Optional secret for authentication [env: BORE_SECRET]
-    -V, --version                Print version information
+        --control-port <CONTROL_PORT>    Listen of the remote proxy server [default: 7835]
+    -h, --help                           Print help information
+        --min-port <MIN_PORT>            Minimum TCP port number to accept [default: 1024]
+    -s, --secret <SECRET>                Optional secret for authentication [env: BORE_SECRET]
+    -V, --version                        Print version information
 ```
 
 ## Protocol

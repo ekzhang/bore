@@ -25,22 +25,26 @@ pub struct Server {
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
+
+    /// Listen of the remote proxy server.
+    control_port: u16,
 }
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(min_port: u16, secret: Option<&str>) -> Self {
+    pub fn new(min_port: u16, secret: Option<&str>, control_port: u16) -> Self {
         Server {
             min_port,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
+            control_port,
         }
     }
 
     /// Start the server, listening for new connections.
     pub async fn listen(self) -> Result<()> {
         let this = Arc::new(self);
-        let addr = SocketAddr::from(([0, 0, 0, 0], CONTROL_PORT));
+        let addr = SocketAddr::from(([0, 0, 0, 0], this.control_port));
         let listener = TcpListener::bind(&addr).await?;
         info!(?addr, "server listening");
 
@@ -143,6 +147,6 @@ impl Server {
 
 impl Default for Server {
     fn default() -> Self {
-        Server::new(1024, None)
+        Server::new(1024, None, CONTROL_PORT)
     }
 }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bore_cli::{client::Client, server::Server};
+use bore_cli::{client::Client, server::Server, shared::CONTROL_PORT};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -32,6 +32,10 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// Listen of the remote proxy server.
+        #[clap(long, default_value_t = CONTROL_PORT)]
+        control_port: u16,
     },
 
     /// Runs the remote proxy server.
@@ -43,6 +47,10 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// Listen of the remote proxy server.
+        #[clap(long, default_value_t = CONTROL_PORT)]
+        control_port: u16,
     },
 }
 
@@ -50,17 +58,32 @@ enum Command {
 async fn run(command: Command) -> Result<()> {
     match command {
         Command::Local {
+            control_port,
             local_host,
             local_port,
             to,
             port,
             secret,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client = Client::new(
+                &local_host,
+                local_port,
+                &to,
+                port,
+                secret.as_deref(),
+                control_port,
+            )
+            .await?;
             client.listen().await?;
         }
-        Command::Server { min_port, secret } => {
-            Server::new(min_port, secret.as_deref()).listen().await?;
+        Command::Server {
+            control_port,
+            min_port,
+            secret,
+        } => {
+            Server::new(min_port, secret.as_deref(), control_port)
+                .listen()
+                .await?;
         }
     }
 
