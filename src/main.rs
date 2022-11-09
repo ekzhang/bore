@@ -34,6 +34,24 @@ enum Command {
         secret: Option<String>,
     },
 
+    LocalSock {
+        /// The local host to expose.
+        #[clap(short, long, value_name = "HOST", default_value = "localhost")]
+        local_host: String,
+
+        /// Address of the remote server to expose local ports to.
+        #[clap(short, long)]
+        to: String,
+
+        /// Optional port on the remote server to select.
+        #[clap(short, long, default_value_t = 0)]
+        port: u16,
+
+        /// Optional secret for authentication.
+        #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
+        secret: Option<String>,
+    },
+
     /// Runs the remote proxy server.
     Server {
         /// Minimum TCP port number to accept.
@@ -57,7 +75,18 @@ async fn run(command: Command) -> Result<()> {
             secret,
         } => {
             let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
-            client.listen().await?;
+            let socket=false;
+            client.listen(socket).await?;
+        }
+        Command::LocalSock {
+            local_host,
+            to,
+            port,
+            secret,
+        } => {
+            let client = Client::new(&local_host, 0, &to, port, secret.as_deref()).await?;
+            let socket=true;
+            client.listen(socket).await?;
         }
         Command::Server { min_port, secret } => {
             Server::new(min_port, secret.as_deref()).listen().await?;

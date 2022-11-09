@@ -5,9 +5,10 @@ use std::sync::Arc;
 use anyhow::{bail, Context, Result};
 
 use tokio::io::AsyncWriteExt;
-use tokio::{net::TcpStream, time::timeout};
+use tokio::{net::TcpStream, net::UnixStream, time::timeout};
 use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
+use std::path::Path;
 
 use crate::auth::Authenticator;
 use crate::shared::{
@@ -79,7 +80,7 @@ impl Client {
     }
 
     /// Start the client, listening for new connections.
-    pub async fn listen(mut self) -> Result<()> {
+    pub async fn listen(mut self, socket: bool) -> Result<()> {
         let mut conn = self.conn.take().unwrap();
         let this = Arc::new(self);
         loop {
@@ -92,10 +93,19 @@ impl Client {
                     tokio::spawn(
                         async move {
                             info!("new connection");
-                            match this.handle_connection(id).await {
-                                Ok(_) => info!("connection exited"),
-                                Err(err) => warn!(%err, "connection exited with error"),
+                            if socket {
+                                match this.handle_socket_connection(id).await {
+                                    Ok(_) => info!("connection exited"),
+                                    Err(err) => warn!(%err, "connection exited with error"),
+                                }
                             }
+                            else{
+                                match this.handle_connection(id).await {
+                                    Ok(_) => info!("connection exited"),
+                                    Err(err) => warn!(%err, "connection exited with error"),
+                                }
+                            }
+                            
                         }
                         .instrument(info_span!("proxy", %id)),
                     );
@@ -120,6 +130,21 @@ impl Client {
         proxy(local_conn, parts.io).await?;
         Ok(())
     }
+
+    async fn handle_socket_connection(&self, id: Uuid) -> Result<()> {
+        let mut remote_conn =
+            Delimited::new(connect_with_timeout(&self.to[..], CONTROL_PORT).await?);
+        if let Some(auth) = &self.auth {
+            auth.client_handshake(&mut remote_conn).await?;
+        }
+        remote_conn.send(ClientMessage::Accept(id)).await?;
+        let mut local_conn = connect_sock_with_timeout(&Path::new(&self.local_host)).await?;
+        let parts = remote_conn.into_parts();
+        debug_assert!(parts.write_buf.is_empty(), "framed write buffer not empty");
+        local_conn.write_all(&parts.read_buf).await?; // mostly of the cases, this will be empty
+        proxy(local_conn, parts.io).await?;
+        Ok(())
+    }
 }
 
 async fn connect_with_timeout(to: &str, port: u16) -> Result<TcpStream> {
@@ -128,4 +153,12 @@ async fn connect_with_timeout(to: &str, port: u16) -> Result<TcpStream> {
         Err(err) => Err(err.into()),
     }
     .with_context(|| format!("could not connect to {to}:{port}"))
+}
+
+async fn connect_sock_with_timeout(to: &Path) -> Result<UnixStream> {
+    match timeout(NETWORK_TIMEOUT, UnixStream::connect(to)).await {
+        Ok(res) => res,
+        Err(err) => Err(err.into()),
+    }
+    .with_context(|| format!("could not connect to unix socket {0}", to.display()))
 }
