@@ -60,22 +60,19 @@ You can optionally pass in a `--port` option to pick a specific port on the remo
 The full options are shown below.
 
 ```shell
-bore-local 0.4.0
 Starts a local proxy to the remote server
 
-USAGE:
-    bore local [OPTIONS] --to <TO> <LOCAL_PORT>
+Usage: bore local [OPTIONS] --to <TO> <LOCAL_PORT>
 
-ARGS:
-    <LOCAL_PORT>    The local port to expose
+Arguments:
+  <LOCAL_PORT>  The local port to expose
 
-OPTIONS:
-    -h, --help                 Print help information
-    -l, --local-host <HOST>    The local host to expose [default: localhost]
-    -p, --port <PORT>          Optional port on the remote server to select [default: 0]
-    -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
-    -t, --to <TO>              Address of the remote server to expose local ports to
-    -V, --version              Print version information
+Options:
+  -l, --local-host <HOST>  The local host to expose [default: localhost]
+  -t, --to <TO>            Address of the remote server to expose local ports to [env: BORE_SERVER=]
+  -p, --port <PORT>        Optional port on the remote server to select [default: 0]
+  -s, --secret <SECRET>    Optional secret for authentication [env: BORE_SECRET]
+  -h, --help               Print help information
 ```
 
 ### Self-Hosting
@@ -91,17 +88,14 @@ That's all it takes! After the server starts running at a given address, you can
 The full options for the `bore server` command are shown below.
 
 ```shell
-bore-server 0.4.0
 Runs the remote proxy server
 
-USAGE:
-    bore server [OPTIONS]
+Usage: bore server [OPTIONS]
 
-OPTIONS:
-    -h, --help                   Print help information
-        --min-port <MIN_PORT>    Minimum TCP port number to accept [default: 1024]
-    -s, --secret <SECRET>        Optional secret for authentication [env: BORE_SECRET]
-    -V, --version                Print version information
+Options:
+      --min-port <MIN_PORT>  Minimum TCP port number to accept [default: 1024]
+  -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
+  -h, --help                 Print help information
 ```
 
 ## Protocol

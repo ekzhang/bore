@@ -4,7 +4,6 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
-#[clap(propagate_version = true)]
 struct Args {
     #[clap(subcommand)]
     command: Command,

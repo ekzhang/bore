@@ -84,7 +84,7 @@ async fn mismatched_secret(
 async fn invalid_address() -> Result<()> {
     // We don't need the serial guard for this test because it doesn't create a server.
     async fn check_address(to: &str, use_secret: bool) -> Result<()> {
-        match Client::new("localhost", 5000, to, 0, use_secret.then(|| "a secret")).await {
+        match Client::new("localhost", 5000, to, 0, use_secret.then_some("a secret")).await {
             Ok(_) => Err(anyhow!("expected error for {to}, use_secret={use_secret}")),
             Err(_) => Ok(()),
         }
