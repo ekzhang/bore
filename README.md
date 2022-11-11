@@ -37,7 +37,7 @@ You also can build `bore` from source using [Cargo](https://doc.rust-lang.org/ca
 cargo install bore-cli
 ```
 
-We also publish versioned Docker images for each release. Each image is built for AMD 64-bit and Arm 64-bit architectures. They're tagged with the specific version and allow you to run the statically-linked `bore` binary from a minimal "scratch" container.
+We also publish versioned Docker images for each release. The image is built for an AMD 64-bit architecture. They're tagged with the specific version and allow you to run the statically-linked `bore` binary from a minimal "scratch" container.
 
 ```shell
 docker run -it --init --rm --network host ekzhang/bore <ARGS>
