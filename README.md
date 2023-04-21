@@ -94,6 +94,7 @@ Usage: bore server [OPTIONS]
 
 Options:
       --min-port <MIN_PORT>  Minimum TCP port number to accept [default: 1024]
+      --max-port <MAX_PORT>  Maximum TCP port number to accept [default: 65535]
   -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
   -h, --help                 Print help information
 ```

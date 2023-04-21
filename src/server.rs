@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use dashmap::DashMap;
+use rand::Rng;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{sleep, timeout};
@@ -20,6 +21,9 @@ pub struct Server {
     /// The minimum TCP port that can be forwarded.
     min_port: u16,
 
+    /// The maximum TCP port that can be forwarded.
+    max_port: u16,
+
     /// Optional secret used to authenticate clients.
     auth: Option<Authenticator>,
 
@@ -29,9 +33,10 @@ pub struct Server {
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(min_port: u16, secret: Option<&str>) -> Self {
+    pub fn new(min_port: u16, max_port: u16, secret: Option<&str>) -> Self {
         Server {
             min_port,
+            max_port,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
         }
@@ -77,23 +82,60 @@ impl Server {
                 Ok(())
             }
             Some(ClientMessage::Hello(port)) => {
-                if port != 0 && port < self.min_port {
-                    warn!(?port, "client port number too low");
+                if port != 0 && (port < self.min_port || port > self.max_port) {
+                    warn!(?port, "client port number not in range [{}, {}]", self.min_port, self.max_port);
                     return Ok(());
                 }
                 info!(?port, "new client");
-                let listener = match TcpListener::bind(("0.0.0.0", port)).await {
-                    Ok(listener) => listener,
-                    Err(_) => {
-                        warn!(?port, "could not bind to local port");
+
+                let mut listener = None;
+                if port == 0 {
+                    let initial_state = {
+                        let mut rng = rand::thread_rng();
+                        rng.gen_range(self.min_port..=self.max_port)
+                    };
+                    
+                    let mut bound = false;
+                    for port in RandomPortGenerator::new(initial_state, self.min_port, self.max_port) {
+                        match TcpListener::bind(("0.0.0.0", port)).await {
+                            Ok(bound_listener) => {
+                                listener = Some(bound_listener);
+                                bound = true;
+                                break
+                            },
+                            Err(_) => {
+                                warn!(?port, "could not bind to random local port");
+                            }
+                        };
+                    }
+                    
+                    if !bound {
+                        let error = format!("no ports available in range [{}, {}]", self.min_port, self.max_port);
+                        warn!("{}", error);
                         stream
-                            .send(ServerMessage::Error("port already in use".into()))
+                            .send(ServerMessage::Error(error))
                             .await?;
                         return Ok(());
                     }
-                };
+                } else {
+                    listener = match TcpListener::bind(("0.0.0.0", port)).await {
+                        Ok(bound_listener) => Some(bound_listener),
+                        Err(_) => {
+                            warn!(?port, "could not bind to local port");
+                            stream
+                                .send(ServerMessage::Error("port already in use".into()))
+                                .await?;
+                            return Ok(());
+                        }
+                    };
+                }
+
+                // safe unwrap because we always return if listener is None
+                let listener = listener.unwrap();
+
                 let port = listener.local_addr()?.port();
                 stream.send(ServerMessage::Hello(port)).await?;
+                info!(?port, "client listener initialized");
 
                 loop {
                     if stream.send(ServerMessage::Heartbeat).await.is_err() {
@@ -143,6 +185,69 @@ impl Server {
 
 impl Default for Server {
     fn default() -> Self {
-        Server::new(1024, None)
+        Server::new(1024, u16::MAX, None)
+    }
+}
+
+struct RandomPortGenerator {
+    state: u16,
+    consumed: u16,
+    min_port: u16,
+    max_port: u16,
+}
+
+impl RandomPortGenerator {
+    fn new(initial_state: u16, min_port: u16, max_port: u16) -> Self {
+        Self {
+            state: initial_state,
+            consumed: 0,
+            min_port,
+            max_port
+        }
+    }
+
+    fn step(&mut self) -> u16 {
+        if self.done() {
+            return 0
+        }
+
+        let bit  = ((self.state >> 0) ^ 
+                    (self.state >> 2) ^ 
+                    (self.state >> 3) ^ 
+                    (self.state >> 5)) & 1;
+
+        let state = (self.state >> 1) | (bit << 15);
+        self.state =  state;
+        self.consumed += 1;
+
+        state
+    }
+
+    fn done(&mut self) -> bool {
+        self.consumed == u16::MAX || self.state == 0
+    }
+}
+
+impl Iterator for RandomPortGenerator {
+    type Item = u16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.consumed == u16::MAX {
+            return None
+        }
+
+        // from the current state, sample until we get a port in the range or we're done
+        let mut sample = self.state;
+        while sample < self.min_port || sample > self.max_port {
+            sample = self.step();
+
+            if self.done() {
+                return None
+            }
+        }
+        // prime the next sample by taking a step
+        self.step();
+
+        Some(sample)
     }
 }
