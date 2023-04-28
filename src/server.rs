@@ -84,8 +84,8 @@ impl Server {
             // ports are currently available, it suffices to check approximately -2 ln(δ) / ε
             // independently and uniformly chosen ports (up to a second-order term in ε).
             //
-            // Checking 150 times gives us 99.999% success at utilizing 85% of ports under this
-            // bound, when ε=0.5 and δ=0.00001.
+            // Checking 150 times gives us 99.999% success at utilizing 85% of ports under these
+            // conditions, when ε=0.15 and δ=0.00001.
             for _ in 0..150 {
                 let port = fastrand::u16(self.port_range.clone());
                 match try_bind(port).await {
