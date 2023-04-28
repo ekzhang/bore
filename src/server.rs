@@ -1,6 +1,6 @@
 //! Server implementation for the `bore` service.
 
-use std::{io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{io, net::SocketAddr, ops::RangeInclusive, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use dashmap::DashMap;
@@ -15,8 +15,8 @@ use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT
 
 /// State structure for the server.
 pub struct Server {
-    /// The minimum TCP port that can be forwarded.
-    min_port: u16,
+    /// Range of TCP ports that can be forwarded.
+    port_range: RangeInclusive<u16>,
 
     /// Optional secret used to authenticate clients.
     auth: Option<Authenticator>,
@@ -27,9 +27,10 @@ pub struct Server {
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(min_port: u16, secret: Option<&str>) -> Self {
+    pub fn new(port_range: RangeInclusive<u16>, secret: Option<&str>) -> Self {
+        assert!(!port_range.is_empty(), "must provide at least one port");
         Server {
-            min_port,
+            port_range,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
         }
@@ -71,7 +72,7 @@ impl Server {
         };
         if port > 0 {
             // Client requests a specific port number.
-            if port < self.min_port {
+            if !self.port_range.contains(&port) {
                 return Err("client port number not in allowed range");
             }
             try_bind(port).await
@@ -86,7 +87,7 @@ impl Server {
             // Checking 150 times gives us 99.999% success at utilizing 85% of ports under this
             // bound, when ε=0.5 and δ=0.00001.
             for _ in 0..150 {
-                let port = fastrand::u16(self.min_port..);
+                let port = fastrand::u16(self.port_range.clone());
                 match try_bind(port).await {
                     Ok(listener) => return Ok(listener),
                     Err(_) => continue,
