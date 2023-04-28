@@ -1,8 +1,6 @@
 //! Server implementation for the `bore` service.
 
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use dashmap::DashMap;
@@ -61,6 +59,43 @@ impl Server {
         }
     }
 
+    async fn create_listener(&self, port: u16) -> Result<TcpListener, &'static str> {
+        let try_bind = |port: u16| async move {
+            TcpListener::bind(("0.0.0.0", port))
+                .await
+                .map_err(|err| match err.kind() {
+                    io::ErrorKind::AddrInUse => "port already in use",
+                    io::ErrorKind::PermissionDenied => "permission denied",
+                    _ => "failed to bind to port",
+                })
+        };
+        if port > 0 {
+            // Client requests a specific port number.
+            if port < self.min_port {
+                return Err("client port number not in allowed range");
+            }
+            try_bind(port).await
+        } else {
+            // Client requests any available port in range.
+            //
+            // In this case, we bind to 150 random port numbers. We choose this value because in
+            // order to find a free port with probability at least 1-δ, when ε proportion of the
+            // ports are currently available, it suffices to check approximately -2 ln(δ) / ε
+            // independently and uniformly chosen ports (up to a second-order term in ε).
+            //
+            // Checking 150 times gives us 99.999% success at utilizing 85% of ports under this
+            // bound, when ε=0.5 and δ=0.00001.
+            for _ in 0..150 {
+                let port = fastrand::u16(self.min_port..);
+                match try_bind(port).await {
+                    Ok(listener) => return Ok(listener),
+                    Err(_) => continue,
+                }
+            }
+            Err("failed to find an available port")
+        }
+    }
+
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
         let mut stream = Delimited::new(stream);
         if let Some(auth) = &self.auth {
@@ -77,22 +112,14 @@ impl Server {
                 Ok(())
             }
             Some(ClientMessage::Hello(port)) => {
-                if port != 0 && port < self.min_port {
-                    warn!(?port, "client port number too low");
+                let Ok(listener) = self.create_listener(port).await else {
+                    stream
+                        .send(ServerMessage::Error("port already in use".into()))
+                        .await?;
                     return Ok(());
-                }
-                info!(?port, "new client");
-                let listener = match TcpListener::bind(("0.0.0.0", port)).await {
-                    Ok(listener) => listener,
-                    Err(_) => {
-                        warn!(?port, "could not bind to local port");
-                        stream
-                            .send(ServerMessage::Error("port already in use".into()))
-                            .await?;
-                        return Ok(());
-                    }
                 };
                 let port = listener.local_addr()?.port();
+                info!(?port, "new client");
                 stream.send(ServerMessage::Hello(port)).await?;
 
                 loop {
@@ -133,16 +160,7 @@ impl Server {
                 }
                 Ok(())
             }
-            None => {
-                warn!("unexpected EOF");
-                Ok(())
-            }
+            None => Ok(()),
         }
-    }
-}
-
-impl Default for Server {
-    fn default() -> Self {
-        Server::new(1024, None)
     }
 }
