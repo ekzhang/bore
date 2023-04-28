@@ -3,9 +3,7 @@
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
-
-use tokio::io::AsyncWriteExt;
-use tokio::{net::TcpStream, time::timeout};
+use tokio::{io::AsyncWriteExt, net::TcpStream, time::timeout};
 use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 

@@ -19,7 +19,7 @@ This will expose your local port at `localhost:8000` to the public internet at `
 
 Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok](https://ngrok.io/), except `bore` is intended to be a highly efficient, unopinionated tool for forwarding TCP traffic that is simple to install and easy to self-host, with no frills attached.
 
-(`bore` totals less than 400 lines of safe, async Rust code and is trivial to set up — just run a single binary for the client and server.)
+(`bore` totals about 400 lines of safe, async Rust code and is trivial to set up — just run a single binary for the client and server.)
 
 ## Installation
 
@@ -93,7 +93,8 @@ Runs the remote proxy server
 Usage: bore server [OPTIONS]
 
 Options:
-      --min-port <MIN_PORT>  Minimum TCP port number to accept [default: 1024]
+      --min-port <MIN_PORT>  Minimum accepted TCP port number [default: 1024]
+      --max-port <MAX_PORT>  Maximum accepted TCP port number [default: 65535]
   -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
   -h, --help                 Print help information
 ```
