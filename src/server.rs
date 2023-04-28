@@ -113,11 +113,12 @@ impl Server {
                 Ok(())
             }
             Some(ClientMessage::Hello(port)) => {
-                let Ok(listener) = self.create_listener(port).await else {
-                    stream
-                        .send(ServerMessage::Error("port already in use".into()))
-                        .await?;
-                    return Ok(());
+                let listener = match self.create_listener(port).await {
+                    Ok(listener) => listener,
+                    Err(err) => {
+                        stream.send(ServerMessage::Error(err.into())).await?;
+                        return Ok(());
+                    }
                 };
                 let port = listener.local_addr()?.port();
                 info!(?port, "new client");
