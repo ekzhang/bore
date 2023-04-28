@@ -23,10 +23,10 @@ Similar to [localtunnel](https://github.com/localtunnel/localtunnel) and [ngrok]
 
 ## Installation
 
-If you're on macOS, `bore` is packaged as a Homebrew formula.
+If you're on macOS, `bore` is packaged as a Homebrew core formula.
 
 ```shell
-brew install ekzhang/bore/bore
+brew install bore-cli
 ```
 
 Otherwise, the easiest way to install bore is from prebuilt binaries. These are available on the [releases page](https://github.com/ekzhang/bore/releases) for macOS, Windows, and Linux. Just unzip the appropriate file for your platform and move the `bore` executable into a folder on your PATH.
