@@ -1,18 +1,18 @@
 //! Server implementation for the `bore` service.
 
 use std::{io, net::SocketAddr, ops::RangeInclusive, sync::Arc, time::Duration};
+use socket2::{Socket, Type, SockAddr};
 
 use anyhow::Result;
 use dashmap::DashMap;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{sleep, timeout};
-use tracing::{info, info_span, warn, Instrument};
+use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
-
 /// State structure for the server.
 pub struct Server {
     /// Range of TCP ports that can be forwarded.
@@ -23,52 +23,96 @@ pub struct Server {
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
+
+    /// Listen Addr
+    listen_addr: String,
 }
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(port_range: RangeInclusive<u16>, secret: Option<&str>) -> Self {
+    pub fn new(port_range: RangeInclusive<u16>, secret: Option<&str>, listen_addr: String) -> Self {
         assert!(!port_range.is_empty(), "must provide at least one port");
         Server {
             port_range,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
+            listen_addr,
         }
     }
-
-    /// Start the server, listening for new connections.
-    pub async fn listen(self) -> Result<()> {
-        let this = Arc::new(self);
-        let addr = SocketAddr::from(([0, 0, 0, 0], CONTROL_PORT));
-        let listener = TcpListener::bind(&addr).await?;
-        info!(?addr, "server listening");
-
-        loop {
-            let (stream, addr) = listener.accept().await?;
-            let this = Arc::clone(&this);
-            tokio::spawn(
-                async move {
-                    info!("incoming connection");
-                    if let Err(err) = this.handle_connection(stream).await {
-                        warn!(%err, "connection exited with error");
-                    } else {
-                        info!("connection exited");
-                    }
-                }
-                .instrument(info_span!("control", ?addr)),
-            );
+    /// Create a TcpListener using socket2
+    pub async fn tcp_listen(&self, listen_addr: &String, listen_port: u16) -> Result<TcpListener, &'static str> {
+        let addr_str: String = format!("{}:{}", listen_addr, listen_port);
+        let addr = addr_str.parse::<SocketAddr>();
+        if let Err(_) = addr {
+            return Err("failed to parse ip address");
         }
-    }
-
-    async fn create_listener(&self, port: u16) -> Result<TcpListener, &'static str> {
-        let try_bind = |port: u16| async move {
-            TcpListener::bind(("0.0.0.0", port))
-                .await
-                .map_err(|err| match err.kind() {
+        let addr: SockAddr = addr.unwrap().into();
+        // Create socket
+        let socket = Socket::new(addr.domain(),Type::STREAM, None).unwrap();
+        // Make socket dual-stack before binding
+        if addr.is_ipv6()  {
+            if Socket::only_v6(&socket).unwrap() {
+            let _= Socket::set_only_v6(&socket,false);
+            }
+        }
+        let a = socket.bind(&addr)
+                    .map_err(|err| match err.kind() {
                     io::ErrorKind::AddrInUse => "port already in use",
                     io::ErrorKind::PermissionDenied => "permission denied",
-                    _ => "failed to bind to port",
-                })
+                    _ => "failed to bind socket",
+                });
+        if let Err(i) = a {
+            return Err(i);
+        }
+        
+        let _= socket.listen(128);
+        let std_listener: std::net::TcpListener = socket.into();
+        let _= std_listener.set_nonblocking(true);
+        let listener = TcpListener::from_std(std_listener);
+        match listener {
+            Ok(listener) => {
+                return Ok(listener);
+            },
+            Err(_) => {
+                return Err("tcp listener error");
+            }
+        };
+
+    }
+    /// Start the server, listening for new connections.
+    pub async fn listen(self) -> Result<()> {
+        let this: Arc<Server> = Arc::new(self);
+        let listener = this.tcp_listen(&this.listen_addr,CONTROL_PORT).await;
+        match listener {
+            Ok(listener) => {
+                info!("{} {}:{}", "server listening:", this.listen_addr, CONTROL_PORT);
+                loop {
+                    let (stream, addr) = listener.accept().await?;
+                    let this = Arc::clone(&this);
+                    tokio::spawn(
+                        async move {
+                            info!("incoming connection");
+                            if let Err(err) = this.handle_connection(stream).await {
+                                warn!(%err, "connection exited with error");
+                            } else {
+                                info!("connection exited");
+                            }
+                        }
+                        .instrument(info_span!("control", ?addr)),
+                    );
+                }
+            },
+            Err(i) => {
+                error!("failed to create tcp listener: {}",i);
+                return Err(anyhow::anyhow!("failed to start server"));
+            }
+        };
+
+    }
+    async fn create_listener(&self, port: u16) -> Result<TcpListener, &'static str> {
+        let try_bind = |port: u16| async move {
+            self.tcp_listen(&self.listen_addr, port)
+                .await
         };
         if port > 0 {
             // Client requests a specific port number.
