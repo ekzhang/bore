@@ -46,6 +46,10 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+        
+        /// Listen Addr.
+        #[clap(short, long, default_value = "[::]")]
+        listen_addr: String,
     },
 }
 
@@ -66,6 +70,7 @@ async fn run(command: Command) -> Result<()> {
             min_port,
             max_port,
             secret,
+            listen_addr,
         } => {
             let port_range = min_port..=max_port;
             if port_range.is_empty() {
@@ -73,7 +78,7 @@ async fn run(command: Command) -> Result<()> {
                     .error(ErrorKind::InvalidValue, "port range is empty")
                     .exit();
             }
-            Server::new(port_range, secret.as_deref()).listen().await?;
+            Server::new(port_range, secret.as_deref(), listen_addr).listen().await?;
         }
     }
 
