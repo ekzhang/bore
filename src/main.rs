@@ -1,6 +1,9 @@
 use anyhow::Result;
 use bore_cli::{client::Client, server::Server};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
+use std::path::PathBuf;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -31,6 +34,10 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+	/// Write the assigned remote port to the given path.
+	#[clap(long, env = "BORE_WRITE_PORT_TO")]
+	write_port_to: Option<PathBuf>,
     },
 
     /// Runs the remote proxy server.
@@ -58,8 +65,16 @@ async fn run(command: Command) -> Result<()> {
             to,
             port,
             secret,
+	    write_port_to,
         } => {
             let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+
+	    if let Some(path) = write_port_to {
+		let mut file = File::create(path).await?;
+		let port = client.remote_port().to_string();
+		file.write_all(&port.into_bytes()[..]).await?;
+	    }
+
             client.listen().await?;
         }
         Command::Server {
