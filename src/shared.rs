@@ -27,7 +27,7 @@ pub enum ClientMessage {
     Authenticate(String),
 
     /// Initial client message specifying a port to forward.
-    Hello(u16),
+    Hello(u16, String, String),
 
     /// Accepts an incoming TCP connection, using this stream as a proxy.
     Accept(Uuid),

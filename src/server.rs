@@ -1,5 +1,9 @@
 //! Server implementation for the `bore` service.
 
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
+use std::hash;
+use std::sync::RwLock;
 use std::{io, net::SocketAddr, ops::RangeInclusive, sync::Arc, time::Duration};
 
 use anyhow::Result;
@@ -12,6 +16,8 @@ use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
+use std::collections::HashMap;
+
 
 /// State structure for the server.
 pub struct Server {
@@ -23,6 +29,7 @@ pub struct Server {
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
+    port_mappings: RwLock<HashMap<String, u16>>
 }
 
 impl Server {
@@ -33,6 +40,7 @@ impl Server {
             port_range,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
+            port_mappings: RwLock::new(HashMap::new())
         }
     }
 
@@ -97,6 +105,12 @@ impl Server {
         }
     }
 
+    fn update_mappings(&self, device_name: String, port: u16) -> Result<()> {
+        let mut hashmap = self.port_mappings.write().unwrap();
+        hashmap.insert(device_name, port);
+        Ok(())
+    }
+
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
         let mut stream = Delimited::new(stream);
         if let Some(auth) = &self.auth {
@@ -112,7 +126,7 @@ impl Server {
                 warn!("unexpected authenticate");
                 Ok(())
             }
-            Some(ClientMessage::Hello(port)) => {
+            Some(ClientMessage::Hello(port, edge_name, edge_id)) => {
                 let listener = match self.create_listener(port).await {
                     Ok(listener) => listener,
                     Err(err) => {
@@ -123,7 +137,7 @@ impl Server {
                 let port = listener.local_addr()?.port();
                 info!(?port, "new client");
                 stream.send(ServerMessage::Hello(port)).await?;
-
+                let _ = self.update_mappings(edge_name, port);
                 loop {
                     if stream.send(ServerMessage::Heartbeat).await.is_err() {
                         // Assume that the TCP connection has been dropped.

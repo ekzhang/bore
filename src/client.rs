@@ -41,6 +41,8 @@ impl Client {
         to: &str,
         port: u16,
         secret: Option<&str>,
+        edge_name: &str,
+        edge_id: &str
     ) -> Result<Self> {
         let mut stream = Delimited::new(connect_with_timeout(to, CONTROL_PORT).await?);
         let auth = secret.map(Authenticator::new);
@@ -48,7 +50,7 @@ impl Client {
             auth.client_handshake(&mut stream).await?;
         }
 
-        stream.send(ClientMessage::Hello(port)).await?;
+        stream.send(ClientMessage::Hello(port, edge_name.to_string(), edge_id.to_string())).await?;
         let remote_port = match stream.recv_timeout().await? {
             Some(ServerMessage::Hello(remote_port)) => remote_port,
             Some(ServerMessage::Error(message)) => bail!("server error: {message}"),

@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use anyhow::Result;
 use bore_cli::{client::Client, server::Server};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
@@ -8,6 +9,7 @@ struct Args {
     #[clap(subcommand)]
     command: Command,
 }
+
 
 #[derive(Subcommand, Debug)]
 enum Command {
@@ -31,6 +33,12 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        #[clap(short = 'n', long, value_name = "EDGE_NAME")]
+        edge_name: String,
+
+        #[clap(short = 'i', long, value_name = "EDGE_ID")]
+        edge_id: String
     },
 
     /// Runs the remote proxy server.
@@ -58,8 +66,10 @@ async fn run(command: Command) -> Result<()> {
             to,
             port,
             secret,
+            edge_name,
+            edge_id
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref(), &edge_name, &edge_id).await?;
             client.listen().await?;
         }
         Command::Server {
