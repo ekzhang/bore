@@ -1,8 +1,5 @@
 //! Server implementation for the `bore` service.
 
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
-use std::hash;
 use std::sync::RwLock;
 use std::{io, net::SocketAddr, ops::RangeInclusive, sync::Arc, time::Duration};
 
@@ -29,7 +26,7 @@ pub struct Server {
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
-    port_mappings: RwLock<HashMap<String, u16>>
+    port_mappings: RwLock<HashMap<String, (u16, String)>>
 }
 
 impl Server {
@@ -105,10 +102,18 @@ impl Server {
         }
     }
 
-    fn update_mappings(&self, device_name: String, port: u16) -> Result<()> {
+    fn update_mappings(&self, device_name: String, port: u16, device_id: String) -> Result<()> {
+        println!("{} device and {} port", device_name, port);
         let mut hashmap = self.port_mappings.write().unwrap();
-        hashmap.insert(device_name, port);
+        hashmap.insert(device_name, (port, device_id));
         Ok(())
+    }
+    fn get_mappings(&self) -> HashMap<String, (u16, String)> {
+        let hashmap_with_guard = self.port_mappings.read().unwrap();
+        let hashmap = hashmap_with_guard.clone();
+        drop(hashmap_with_guard);
+
+        return hashmap;
     }
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
@@ -137,7 +142,7 @@ impl Server {
                 let port = listener.local_addr()?.port();
                 info!(?port, "new client");
                 stream.send(ServerMessage::Hello(port)).await?;
-                let _ = self.update_mappings(edge_name, port);
+                let _ = self.update_mappings(edge_name, port, edge_id);
                 loop {
                     if stream.send(ServerMessage::Heartbeat).await.is_err() {
                         // Assume that the TCP connection has been dropped.
@@ -175,6 +180,11 @@ impl Server {
                     None => warn!(%id, "missing connection"),
                 }
                 Ok(())
+            }
+            Some(ClientMessage::FetchClients) => {
+                let hashmap = self.get_mappings();
+                stream.send(ServerMessage::Clients(hashmap)).await?;
+                return Ok(());
             }
             None => Ok(()),
         }

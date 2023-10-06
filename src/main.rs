@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use anyhow::Result;
-use bore_cli::{client::Client, server::Server};
+use bore_cli::{client::Client, server::Server, admin::Admin};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -55,6 +55,11 @@ enum Command {
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
     },
+
+    Admin {
+        #[clap(short, long, value_name = "BORE_SERVER")]
+        from: String
+    }
 }
 
 #[tokio::main]
@@ -84,6 +89,10 @@ async fn run(command: Command) -> Result<()> {
                     .exit();
             }
             Server::new(port_range, secret.as_deref()).listen().await?;
+        }
+        Command::Admin { from } => {
+            let admin = Admin::new(&from).await?;
+            admin.listen().await?;
         }
     }
 

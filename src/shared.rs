@@ -1,5 +1,6 @@
 //! Shared data structures, utilities, and protocol definitions.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -31,6 +32,9 @@ pub enum ClientMessage {
 
     /// Accepts an incoming TCP connection, using this stream as a proxy.
     Accept(Uuid),
+
+    /// Send request to server for list of connected clients
+    FetchClients
 }
 
 /// A message from the server on the control connection.
@@ -50,6 +54,9 @@ pub enum ServerMessage {
 
     /// Indicates a server error that terminates the connection.
     Error(String),
+
+    /// Response to an admin's request for list of connected clients
+    Clients(HashMap<String, (u16, String)>)
 }
 
 /// Transport stream with JSON frames delimited by null characters.

@@ -87,6 +87,7 @@ impl Client {
                 Some(ServerMessage::Hello(_)) => warn!("unexpected hello"),
                 Some(ServerMessage::Challenge(_)) => warn!("unexpected challenge"),
                 Some(ServerMessage::Heartbeat) => (),
+                Some(ServerMessage::Clients(_)) => (),
                 Some(ServerMessage::Connection(id)) => {
                     let this = Arc::clone(&this);
                     tokio::spawn(
