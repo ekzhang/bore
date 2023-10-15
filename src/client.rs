@@ -1,12 +1,13 @@
 //! Client implementation for the `bore` service.
 
-use std::sync::Arc;
+use std::sync::{Arc, mpsc, Mutex, RwLock};
+use std::thread;
 
 use anyhow::{bail, Context, Result};
 use tokio::{io::AsyncWriteExt, net::TcpStream, time::timeout};
 use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
-
+use std::time;
 use crate::auth::Authenticator;
 use crate::shared::{
     proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT,
@@ -31,6 +32,12 @@ pub struct Client {
 
     /// Optional secret used to authenticate clients.
     auth: Option<Authenticator>,
+
+    port: u16,
+    edge_name: String,
+    edge_id: String,
+    secret: Option<String>
+
 }
 
 impl Client {
@@ -56,7 +63,7 @@ impl Client {
             Some(ServerMessage::Error(message)) => bail!("server error: {message}"),
             Some(ServerMessage::Challenge(_)) => {
                 bail!("server requires authentication, but no client secret was provided");
-            }
+            },
             Some(_) => bail!("unexpected initial non-hello message"),
             None => bail!("unexpected EOF"),
         };
@@ -70,6 +77,10 @@ impl Client {
             local_port,
             remote_port,
             auth,
+            port,
+            edge_name: edge_name.to_string(),
+            edge_id: edge_id.to_string(),
+            secret: secret.map(str::to_string)
         })
     }
 
@@ -82,11 +93,19 @@ impl Client {
     pub async fn listen(mut self) -> Result<()> {
         let mut conn = self.conn.take().unwrap();
         let this = Arc::new(self);
+        let (tx, rx): (mpsc::Sender<bool>, mpsc::Receiver<bool>) = mpsc::channel();
+
+        let temp = Arc::clone(&this);
+
+        let lockedRx = RwLock::new(rx);
+        let _ = Some(thread::spawn(move || {Client::heartbeat(lockedRx, temp)}));
         loop {
             match conn.recv().await? {
                 Some(ServerMessage::Hello(_)) => warn!("unexpected hello"),
                 Some(ServerMessage::Challenge(_)) => warn!("unexpected challenge"),
-                Some(ServerMessage::Heartbeat) => (),
+                Some(ServerMessage::Heartbeat) => {
+                    let _ = tx.send(true);
+                },
                 Some(ServerMessage::Clients(_)) => (),
                 Some(ServerMessage::Connection(id)) => {
                     let this = Arc::clone(&this);
@@ -107,6 +126,47 @@ impl Client {
         }
     }
 
+    /// Detect heartbeats and retry connecting whenever stops
+    pub async fn heartbeat(lockedRX: RwLock<mpsc::Receiver<bool>>, instance: Arc<Client>) {
+        loop {
+            println!("Heart Beat.....");
+            let rx = lockedRX.read().unwrap();
+
+            match rx.try_recv() {
+                Ok(val) => {
+                    println!("Received: {val}");
+                },
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    println!("Terminating");
+                    break;
+                },
+                Err(mpsc::TryRecvError::Empty) => {
+                    println!("Not received");
+                    match Client::new(instance.local_host.as_str(), instance.local_port, instance.to.as_str(), instance.port, instance.secret.as_deref(), instance.edge_name.as_str(), instance.edge_id.as_str()).await {
+                        Ok(resp) => {
+                            match resp.listen().await {
+                                Ok(_) => {
+                                    print!("Retried and now listening")
+                                },
+                                Err(_) => {
+                                    print!("Error while listening");
+                                }
+                            }
+                        },
+                        Err(_) => {
+                            print!("Error while creating object");
+                        }
+                    }
+                    
+
+                }
+            }
+
+            thread::sleep(time::Duration::from_secs(5));
+        }
+
+    }
+
     async fn handle_connection(&self, id: Uuid) -> Result<()> {
         let mut remote_conn =
             Delimited::new(connect_with_timeout(&self.to[..], CONTROL_PORT).await?);
@@ -119,6 +179,7 @@ impl Client {
         debug_assert!(parts.write_buf.is_empty(), "framed write buffer not empty");
         local_conn.write_all(&parts.read_buf).await?; // mostly of the cases, this will be empty
         proxy(local_conn, parts.io).await?;
+
         Ok(())
     }
 }

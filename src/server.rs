@@ -144,6 +144,7 @@ impl Server {
                 stream.send(ServerMessage::Hello(port)).await?;
                 let _ = self.update_mappings(edge_name, port, edge_id);
                 loop {
+                    println!("Before sending hearbeat");
                     if stream.send(ServerMessage::Heartbeat).await.is_err() {
                         // Assume that the TCP connection has been dropped.
                         return Ok(());
@@ -166,6 +167,7 @@ impl Server {
                         });
                         stream.send(ServerMessage::Connection(id)).await?;
                     }
+                    println!("after await");
                 }
             }
             Some(ClientMessage::Accept(id)) => {
