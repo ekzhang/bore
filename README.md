@@ -57,7 +57,7 @@ bore local 5000 --to bore.pub
 
 You can optionally pass in a `--port` option to pick a specific port on the remote to expose, although the command will fail if this port is not available. Also, passing `--local-host` allows you to expose a different host on your local area network besides the loopback address `localhost`.
 
-The full options are shown below.
+The full options are shown below (See `bore local -h`).
 
 ```
 Starts a local proxy to the remote server
@@ -87,7 +87,7 @@ bore server
 
 That's all it takes! After the server starts running at a given address, you can then update the `bore local` command with option `--to <ADDRESS>` to forward a local port to this remote server.
 
-The full options for the `bore server` command are shown below.
+The full options for the `bore server` command are shown below (See `bore server -h`).
 
 ```
 Runs the remote proxy server
