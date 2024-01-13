@@ -70,7 +70,7 @@ async fn run(command: Command) -> Result<()> {
             secret,
             control_port,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref(), control_port).await?;
             client.listen().await?;
         }
         Command::Server {
@@ -85,7 +85,7 @@ async fn run(command: Command) -> Result<()> {
                     .error(ErrorKind::InvalidValue, "port range is empty")
                     .exit();
             }
-            Server::new(port_range, secret.as_deref()).listen().await?;
+            Server::new(port_range, secret.as_deref(), control_port).listen().await?;
         }
     }
 

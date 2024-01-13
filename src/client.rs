@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{
-    proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT,
+    proxy, ClientMessage, Delimited, ServerMessage, NETWORK_TIMEOUT,
 };
 
 /// State structure for the client.
@@ -31,6 +31,9 @@ pub struct Client {
 
     /// Optional secret used to authenticate clients.
     auth: Option<Authenticator>,
+
+    /// TCP port used for control connections with the server.
+    control_port: u16,
 }
 
 impl Client {
@@ -41,8 +44,9 @@ impl Client {
         to: &str,
         port: u16,
         secret: Option<&str>,
+        control_port: u16,
     ) -> Result<Self> {
-        let mut stream = Delimited::new(connect_with_timeout(to, CONTROL_PORT).await?);
+        let mut stream = Delimited::new(connect_with_timeout(to, control_port).await?);
         let auth = secret.map(Authenticator::new);
         if let Some(auth) = &auth {
             auth.client_handshake(&mut stream).await?;
@@ -68,6 +72,7 @@ impl Client {
             local_port,
             remote_port,
             auth,
+            control_port,
         })
     }
 
@@ -106,7 +111,7 @@ impl Client {
 
     async fn handle_connection(&self, id: Uuid) -> Result<()> {
         let mut remote_conn =
-            Delimited::new(connect_with_timeout(&self.to[..], CONTROL_PORT).await?);
+            Delimited::new(connect_with_timeout(&self.to[..], self.control_port).await?);
         if let Some(auth) = &self.auth {
             auth.client_handshake(&mut remote_conn).await?;
         }
