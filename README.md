@@ -59,7 +59,7 @@ You can optionally pass in a `--port` option to pick a specific port on the remo
 
 The full options are shown below.
 
-```shell
+```
 Starts a local proxy to the remote server
 
 Usage: bore local [OPTIONS] --to <TO> <LOCAL_PORT>
@@ -89,7 +89,7 @@ That's all it takes! After the server starts running at a given address, you can
 
 The full options for the `bore server` command are shown below.
 
-```shell
+```
 Runs the remote proxy server
 
 Usage: bore server [OPTIONS]
