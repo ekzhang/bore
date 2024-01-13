@@ -31,6 +31,11 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// TCP port used for control connections with the server.
+        /// ATTENTION: This port must be equal on both the client and the server.
+        #[clap(short, long, env = "CONTROL_PORT", default_value_t = 7835, verbatim_doc_comment)]
+        control_port: u16,
     },
 
     /// Runs the remote proxy server.
@@ -46,6 +51,11 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// TCP port used for control connections with the server.
+        /// ATTENTION: This port must be equal on both the client and the server.
+        #[clap(short, long, env = "CONTROL_PORT", default_value_t = 7835, verbatim_doc_comment)]
+        control_port: u16,
     },
 }
 
@@ -58,6 +68,7 @@ async fn run(command: Command) -> Result<()> {
             to,
             port,
             secret,
+            control_port,
         } => {
             let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
             client.listen().await?;
@@ -66,6 +77,7 @@ async fn run(command: Command) -> Result<()> {
             min_port,
             max_port,
             secret,
+            control_port,
         } => {
             let port_range = min_port..=max_port;
             if port_range.is_empty() {
