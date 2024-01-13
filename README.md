@@ -68,11 +68,13 @@ Arguments:
   <LOCAL_PORT>  The local port to expose
 
 Options:
-  -l, --local-host <HOST>  The local host to expose [default: localhost]
-  -t, --to <TO>            Address of the remote server to expose local ports to [env: BORE_SERVER=]
-  -p, --port <PORT>        Optional port on the remote server to select [default: 0]
-  -s, --secret <SECRET>    Optional secret for authentication [env: BORE_SECRET]
-  -h, --help               Print help information
+  -l, --local-host <HOST>            The local host to expose [default: localhost]
+  -t, --to <TO>                      Address of the remote server to expose local ports to [env: BORE_SERVER=]
+  -p, --port <PORT>                  Optional port on the remote server to select [default: 0]
+  -s, --secret <SECRET>              Optional secret for authentication [env: BORE_SECRET]
+  -c, --control-port <CONTROL_PORT>  TCP port used for control connections with the server.
+                                     ATTENTION: This port must be equal on both the client and the server. [env: CONTROL_PORT=] [default: 7835]
+  -h, --help                         Print help
 ```
 
 ### Self-Hosting
@@ -93,10 +95,12 @@ Runs the remote proxy server
 Usage: bore server [OPTIONS]
 
 Options:
-      --min-port <MIN_PORT>  Minimum accepted TCP port number [default: 1024]
-      --max-port <MAX_PORT>  Maximum accepted TCP port number [default: 65535]
-  -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
-  -h, --help                 Print help information
+      --min-port <MIN_PORT>          Minimum accepted TCP port number [default: 1024]
+      --max-port <MAX_PORT>          Maximum accepted TCP port number [default: 65535]
+  -s, --secret <SECRET>              Optional secret for authentication [env: BORE_SECRET]
+  -c, --control-port <CONTROL_PORT>  TCP port used for control connections with the server.
+                                     ATTENTION: This port must be equal on both the client and the server. [env: CONTROL_PORT=] [default: 7835]
+  -h, --help                         Print help
 ```
 
 ## Protocol
