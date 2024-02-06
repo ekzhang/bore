@@ -1,6 +1,6 @@
 //! Server implementation for the `bore` service.
 
-use std::{io, net::SocketAddr, ops::RangeInclusive, sync::Arc, time::Duration};
+use std::{io, net::SocketAddr, ops::RangeInclusive, sync::Arc, time::Duration, net::Ipv6Addr};
 
 use anyhow::Result;
 use dashmap::DashMap;
@@ -39,7 +39,8 @@ impl Server {
     /// Start the server, listening for new connections.
     pub async fn listen(self) -> Result<()> {
         let this = Arc::new(self);
-        let addr = SocketAddr::from(([0, 0, 0, 0], CONTROL_PORT));
+        let ipv6_addr = Ipv6Addr::UNSPECIFIED;
+        let addr = SocketAddr::new(ipv6_addr.into(), CONTROL_PORT);
         let listener = TcpListener::bind(&addr).await?;
         info!(?addr, "server listening");
 
