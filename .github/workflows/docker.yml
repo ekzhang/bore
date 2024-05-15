@@ -17,7 +17,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: kennycallado/bore
+          images: ekzhang/bore
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
