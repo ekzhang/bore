@@ -20,7 +20,7 @@ lazy_static! {
 /// Spawn the server, giving some time for the control port TcpListener to start.
 async fn spawn_server(secret: Option<&str>) {
     tokio::spawn(Server::new(1024..=65535, secret).listen());
-    time::sleep(Duration::from_millis(100)).await;
+    time::sleep(Duration::from_millis(50)).await;
 }
 
 /// Spawns a client with randomly assigned ports, returning the listener and remote address.
@@ -68,7 +68,6 @@ async fn basic_proxy(#[values(None, Some(""), Some("abc"))] secret: Option<&str>
     Ok(())
 }
 
-#[ignore]
 #[rstest]
 #[case(None, Some("my secret"))]
 #[case(Some("my secret"), None)]
@@ -83,7 +82,6 @@ async fn mismatched_secret(
     assert!(spawn_client(client_secret).await.is_err());
 }
 
-#[ignore]
 #[tokio::test]
 async fn invalid_address() -> Result<()> {
     // We don't need the serial guard for this test because it doesn't create a server.
