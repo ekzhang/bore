@@ -40,9 +40,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v3
         with:
-          # This doesn't work now because of an issue in multi-platform Docker builds.
-          #   -> see https://github.com/rust-lang/rust/issues/97520
-          # platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
