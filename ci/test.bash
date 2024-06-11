@@ -16,7 +16,7 @@ max_attempts=3
 count=0
 
 while [ $count -lt $max_attempts ]; do
-    CROSS test --target $TARGET_TRIPLE
+    $CROSS test --target $TARGET_TRIPLE
     status=$?
     if [ $status -eq 0 ]; then
         echo "Test passed"
