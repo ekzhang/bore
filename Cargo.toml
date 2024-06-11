@@ -1,6 +1,6 @@
 [package]
 name = "bore-cli"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Eric Zhang <ekzhang1@gmail.com>"]
 license = "MIT"
 description = "A modern, simple TCP tunnel in Rust that exposes local ports to a remote server, bypassing standard NAT connection firewalls."
