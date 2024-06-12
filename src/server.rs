@@ -60,6 +60,17 @@ impl Server {
         }
     }
 
+    fn find_connection_using_port(&self, port: u16) -> Option<Uuid> {
+        for entry in self.conns.iter() {
+            if let Ok(addr) = entry.value().local_addr() {
+                if addr.port() == port {
+                    return Some(entry.key().clone());
+                }
+            }
+        }
+        None
+    }
+
     async fn create_listener(&self, port: u16) -> Result<TcpListener, &'static str> {
         let try_bind = |port: u16| async move {
             TcpListener::bind(("0.0.0.0", port))
@@ -75,7 +86,21 @@ impl Server {
             if !self.port_range.contains(&port) {
                 return Err("client port number not in allowed range");
             }
-            try_bind(port).await
+            match try_bind(port).await {
+                Ok(listener) => return Ok(listener),
+                Err(err) => {
+                    let existing_conn = self.find_connection_using_port(port);
+                    if let Some(existing_conn_key) = existing_conn {
+                        warn!(port, "closing existing connection for this port");
+                        if let Some((_, mut existing_conn_stream)) = self.conns.remove(&existing_conn_key) {
+                            let _ = existing_conn_stream.shutdown().await;
+                        }
+                        try_bind(port).await
+                    } else {
+                        Err(err)
+                    }
+                }
+            }
         } else {
             // Client requests any available port in range.
             //
