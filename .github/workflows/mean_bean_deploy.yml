@@ -102,8 +102,11 @@ jobs:
     strategy:
       matrix:
         target:
+          - aarch64-unknown-linux-musl
+          - arm-unknown-linux-musleabi
           - arm-unknown-linux-gnueabi
           - armv7-unknown-linux-gnueabihf
+          - armv7-unknown-linux-musleabihf
           - i686-unknown-linux-musl
           - x86_64-unknown-linux-musl
     steps:
