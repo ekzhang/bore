@@ -4,7 +4,7 @@ use tokio::io::{self};
 
 #[tokio::test]
 async fn auth_handshake() -> Result<()> {
-    let auth = Authenticator::new("some secret string");
+    let auth = Authenticator::new(String::from("some secret string"));
 
     let (client, server) = io::duplex(8); // Ensure correctness with limited capacity.
     let mut client = Delimited::new(client);
@@ -20,8 +20,8 @@ async fn auth_handshake() -> Result<()> {
 
 #[tokio::test]
 async fn auth_handshake_fail() {
-    let auth = Authenticator::new("client secret");
-    let auth2 = Authenticator::new("different server secret");
+    let auth = Authenticator::new(String::from("client secret"));
+    let auth2 = Authenticator::new(String::from("different server secret"));
 
     let (client, server) = io::duplex(8); // Ensure correctness with limited capacity.
     let mut client = Delimited::new(client);

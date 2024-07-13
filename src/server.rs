@@ -1,5 +1,6 @@
 //! Server implementation for the `bore` service.
 
+use std::path::PathBuf;
 use std::{io, net::SocketAddr, ops::RangeInclusive, sync::Arc, time::Duration};
 
 use anyhow::Result;
@@ -11,7 +12,7 @@ use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
+use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT, file_reader};
 
 /// State structure for the server.
 pub struct Server {
@@ -27,12 +28,19 @@ pub struct Server {
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(port_range: RangeInclusive<u16>, secret: Option<&str>) -> Self {
+    pub async fn new(port_range: RangeInclusive<u16>, secret: Option<String>, filepath: Option<PathBuf>) -> Self {
         assert!(!port_range.is_empty(), "must provide at least one port");
+        let secret :Option<String>  = if let Some(var) = filepath {
+            let file_content = file_reader(var).await;
+            Some(file_content)
+        } else if secret.is_some() {
+            let secret_string = secret.unwrap();
+            Some(secret_string)
+        } else {None};
         Server {
             port_range,
             conns: Arc::new(DashMap::new()),
-            auth: secret.map(Authenticator::new),
+            auth: secret.map(|s| s.to_owned()).map(Authenticator::new),
         }
     }
 

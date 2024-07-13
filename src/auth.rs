@@ -13,7 +13,7 @@ pub struct Authenticator(Hmac<Sha256>);
 
 impl Authenticator {
     /// Generate an authenticator from a secret.
-    pub fn new(secret: &str) -> Self {
+    pub fn new(secret: String) -> Self {
         let hashed_secret = Sha256::new().chain_update(secret).finalize();
         Self(Hmac::new_from_slice(&hashed_secret).expect("HMAC can take key of any size"))
     }

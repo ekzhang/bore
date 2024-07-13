@@ -1,6 +1,6 @@
 //! Client implementation for the `bore` service.
 
-use std::sync::Arc;
+use std::{sync::Arc, path::PathBuf};
 
 use anyhow::{bail, Context, Result};
 use tokio::{io::AsyncWriteExt, net::TcpStream, time::timeout};
@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{
-    proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT,
+    proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT,file_reader,
 };
 
 /// State structure for the client.
@@ -40,13 +40,23 @@ impl Client {
         local_port: u16,
         to: &str,
         port: u16,
-        secret: Option<&str>,
+        secret: Option<String>,
+        filepath: Option<PathBuf>
     ) -> Result<Self> {
         let mut stream = Delimited::new(connect_with_timeout(to, CONTROL_PORT).await?);
-        let auth = secret.map(Authenticator::new);
+       
+        let secret :Option<String>  = if let Some(var) = filepath {
+            let file_content = file_reader(var).await;
+            Some(file_content)
+        } else if secret.is_some() {
+            let secret_string = secret.unwrap();
+            Some(secret_string)
+        } else {None};
+
+        let auth  = secret.map(Authenticator::new);
         if let Some(auth) = &auth {
             auth.client_handshake(&mut stream).await?;
-        }
+        } 
 
         stream.send(ClientMessage::Hello(port)).await?;
         let remote_port = match stream.recv_timeout().await? {
@@ -88,8 +98,7 @@ impl Client {
                 Some(ServerMessage::Connection(id)) => {
                     let this = Arc::clone(&this);
                     tokio::spawn(
-                        async move {
-                            info!("new connection");
+                        async move { info!("new connection");
                             match this.handle_connection(id).await {
                                 Ok(_) => info!("connection exited"),
                                 Err(err) => warn!(%err, "connection exited with error"),
@@ -127,3 +136,5 @@ async fn connect_with_timeout(to: &str, port: u16) -> Result<TcpStream> {
     }
     .with_context(|| format!("could not connect to {to}:{port}"))
 }
+
+

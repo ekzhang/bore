@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use bore_cli::{client::Client, server::Server};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
@@ -7,6 +9,14 @@ use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
 struct Args {
     #[clap(subcommand)]
     command: Command,
+    
+    /// Optional path to file where secret for authentication is stored.
+    #[arg(short, long)]
+    filepath: Option<PathBuf>,
+
+    /// Optional secret for authentication.
+    #[arg(short, long, env = "BORE_SECRET", hide_env_values = true)]
+    secret: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -28,9 +38,8 @@ enum Command {
         #[clap(short, long, default_value_t = 0)]
         port: u16,
 
-        /// Optional secret for authentication.
-        #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
-        secret: Option<String>,
+
+
     },
 
     /// Runs the remote proxy server.
@@ -43,29 +52,28 @@ enum Command {
         #[clap(long, default_value_t = 65535)]
         max_port: u16,
 
-        /// Optional secret for authentication.
-        #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
-        secret: Option<String>,
     },
 }
 
 #[tokio::main]
 async fn run(command: Command) -> Result<()> {
+    let args = Args::parse();
+    let filepath = args.filepath;
+    let secret = args.secret;
+
     match command {
         Command::Local {
             local_host,
             local_port,
             to,
             port,
-            secret,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client = Client::new(&local_host, local_port, &to, port, secret, filepath).await?;
             client.listen().await?;
         }
         Command::Server {
             min_port,
             max_port,
-            secret,
         } => {
             let port_range = min_port..=max_port;
             if port_range.is_empty() {
@@ -73,7 +81,7 @@ async fn run(command: Command) -> Result<()> {
                     .error(ErrorKind::InvalidValue, "port range is empty")
                     .exit();
             }
-            Server::new(port_range, secret.as_deref()).listen().await?;
+            Server::new(port_range, secret, filepath).await.listen().await?;
         }
     }
 

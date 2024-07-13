@@ -1,12 +1,13 @@
 //! Shared data structures, utilities, and protocol definitions.
 
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::time::timeout;
+use tokio::fs::read_to_string;
 use tokio_util::codec::{AnyDelimiterCodec, Framed, FramedParts};
 use tracing::trace;
 use uuid::Uuid;
@@ -111,4 +112,21 @@ where
         res = io::copy(&mut s2_read, &mut s1_write) => res,
     }?;
     Ok(())
+}
+
+/// Reads secret files and handles errors
+pub async fn file_reader(path: PathBuf) -> String {
+    let contents = read_to_string(path);
+    match contents.await {
+        Ok(content) => {
+            if content.is_empty() {
+                eprint!("Secret file is empty");
+                std::process::exit(1);
+            } else {content}
+        },
+        Err(err) => {
+            eprint!("Secret file doesn't exist or cannot be opened: {err}");
+            std::process::exit(1);
+        },
+    }
 }
