@@ -46,6 +46,9 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        #[clap(short, long)]
+        allow: Vec<String>,
     },
 }
 
@@ -66,14 +69,25 @@ async fn run(command: Command) -> Result<()> {
             min_port,
             max_port,
             secret,
+            allow,
         } => {
+            let allowed_ip_size = allow.len();
+            let allow: Vec<std::net::Ipv4Addr> =
+                allow.into_iter().map(|x| x.parse()).flatten().collect();
+            if allow.len() != allowed_ip_size {
+                Args::command()
+                    .error(ErrorKind::InvalidValue, "invalid IP address")
+                    .exit();
+            }
             let port_range = min_port..=max_port;
             if port_range.is_empty() {
                 Args::command()
                     .error(ErrorKind::InvalidValue, "port range is empty")
                     .exit();
             }
-            Server::new(port_range, secret.as_deref()).listen().await?;
+            Server::new(port_range, secret.as_deref(), allow)
+                .listen()
+                .await?;
         }
     }
 

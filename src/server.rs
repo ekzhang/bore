@@ -23,16 +23,23 @@ pub struct Server {
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
+
+    allow: Vec<std::net::Ipv4Addr>,
 }
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(port_range: RangeInclusive<u16>, secret: Option<&str>) -> Self {
+    pub fn new(
+        port_range: RangeInclusive<u16>,
+        secret: Option<&str>,
+        allow: Vec<std::net::Ipv4Addr>,
+    ) -> Self {
         assert!(!port_range.is_empty(), "must provide at least one port");
         Server {
             port_range,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
+            allow,
         }
     }
 
@@ -45,6 +52,16 @@ impl Server {
 
         loop {
             let (stream, addr) = listener.accept().await?;
+
+            let ipaddr = match addr.ip() {
+                std::net::IpAddr::V4(ipv4) => ipv4,
+                std::net::IpAddr::V6(_) => continue,
+            };
+
+            if !this.allow.is_empty() && !this.allow.contains(&ipaddr) {
+                warn!(%addr, "connection from unauthorized IP address");
+                continue;
+            }
             let this = Arc::clone(&this);
             tokio::spawn(
                 async move {
