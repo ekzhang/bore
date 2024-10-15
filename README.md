@@ -93,8 +93,8 @@ Runs the remote proxy server
 Usage: bore server [OPTIONS]
 
 Options:
-      --min-port <MIN_PORT>  Minimum accepted TCP port number [default: 1024]
-      --max-port <MAX_PORT>  Maximum accepted TCP port number [default: 65535]
+      --min-port <MIN_PORT>  Minimum accepted TCP port number [default: 1024, env: BORE_MIN_PORT]
+      --max-port <MAX_PORT>  Maximum accepted TCP port number [default: 65535, env: BORE_MAX_PORT]
   -s, --secret <SECRET>      Optional secret for authentication [env: BORE_SECRET]
   -h, --help                 Print help information
 ```

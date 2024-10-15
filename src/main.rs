@@ -36,11 +36,11 @@ enum Command {
     /// Runs the remote proxy server.
     Server {
         /// Minimum accepted TCP port number.
-        #[clap(long, default_value_t = 1024)]
+        #[clap(long, default_value_t = 1024, env = "BORE_MIN_PORT")]
         min_port: u16,
 
         /// Maximum accepted TCP port number.
-        #[clap(long, default_value_t = 65535)]
+        #[clap(long, default_value_t = 65535, env = "BORE_MAX_PORT")]
         max_port: u16,
 
         /// Optional secret for authentication.
