@@ -1,4 +1,4 @@
-name: Docker
+name: Docker Server
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ekzhang/bore
+          images: ekzhang/bore-server
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -44,7 +44,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          target: bore
+          target: server
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
