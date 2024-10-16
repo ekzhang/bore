@@ -14,6 +14,7 @@ enum Command {
     /// Starts a local proxy to the remote server.
     Local {
         /// The local port to expose.
+        #[clap(env = "BORE_LOCAL_PORT")]
         local_port: u16,
 
         /// The local host to expose.
