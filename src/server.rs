@@ -116,6 +116,7 @@ impl Server {
     }
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
+        let peer_addr = stream.peer_addr().unwrap().to_string();
         let mut stream = Delimited::new(stream);
         if let Some(auth) = &self.auth {
             if let Err(err) = auth.server_handshake(&mut stream).await {
@@ -146,6 +147,7 @@ impl Server {
                 loop {
                     if stream.send(ServerMessage::Heartbeat).await.is_err() {
                         // Assume that the TCP connection has been dropped.
+                        info!(peer_addr, "connection dropped after heartbeat timeout");
                         return Ok(());
                     }
                     const TIMEOUT: Duration = Duration::from_millis(500);
