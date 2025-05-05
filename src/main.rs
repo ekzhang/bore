@@ -23,6 +23,10 @@ enum Command {
         #[clap(short, long, value_name = "HOST", default_value = "localhost")]
         local_host: String,
 
+        /// The host ID-String for remote server
+        #[clap(short, long, env = "BORE_HOSTID", default_value = "")]
+        id_string: String,
+
         /// Address of the remote server to expose local ports to.
         #[clap(short, long, env = "BORE_SERVER")]
         to: String,
@@ -66,11 +70,12 @@ async fn run(command: Command) -> Result<()> {
         Command::Local {
             local_host,
             local_port,
+            id_string,
             to,
             port,
             secret,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client = Client::new(&local_host, local_port, &id_string, &to, port, secret.as_deref()).await?;
             client.listen().await?;
         }
         Command::Server {
