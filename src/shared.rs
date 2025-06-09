@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio::io::{self, AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::time::timeout;
 use tokio_util::codec::{AnyDelimiterCodec, Framed, FramedParts};
 use tracing::trace;
@@ -96,19 +96,4 @@ impl<U: AsyncRead + AsyncWrite + Unpin> Delimited<U> {
     pub fn into_parts(self) -> FramedParts<U, AnyDelimiterCodec> {
         self.0.into_parts()
     }
-}
-
-/// Copy data mutually between two read/write streams.
-pub async fn proxy<S1, S2>(stream1: S1, stream2: S2) -> io::Result<()>
-where
-    S1: AsyncRead + AsyncWrite + Unpin,
-    S2: AsyncRead + AsyncWrite + Unpin,
-{
-    let (mut s1_read, mut s1_write) = io::split(stream1);
-    let (mut s2_read, mut s2_write) = io::split(stream2);
-    tokio::select! {
-        res = io::copy(&mut s1_read, &mut s2_write) => res,
-        res = io::copy(&mut s2_read, &mut s1_write) => res,
-    }?;
-    Ok(())
 }

@@ -12,7 +12,7 @@ use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
+use crate::shared::{ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
 
 /// State structure for the server.
 pub struct Server {
@@ -172,10 +172,10 @@ impl Server {
                 info!(%id, "forwarding connection");
                 match self.conns.remove(&id) {
                     Some((_, mut stream2)) => {
-                        let parts = stream.into_parts();
+                        let mut parts = stream.into_parts();
                         debug_assert!(parts.write_buf.is_empty(), "framed write buffer not empty");
                         stream2.write_all(&parts.read_buf).await?;
-                        proxy(parts.io, stream2).await?
+                        tokio::io::copy_bidirectional(&mut parts.io, &mut stream2).await?;
                     }
                     None => warn!(%id, "missing connection"),
                 }

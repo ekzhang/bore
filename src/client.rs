@@ -8,9 +8,7 @@ use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{
-    proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT,
-};
+use crate::shared::{ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT};
 
 /// State structure for the client.
 pub struct Client {
@@ -112,10 +110,10 @@ impl Client {
         }
         remote_conn.send(ClientMessage::Accept(id)).await?;
         let mut local_conn = connect_with_timeout(&self.local_host, self.local_port).await?;
-        let parts = remote_conn.into_parts();
+        let mut parts = remote_conn.into_parts();
         debug_assert!(parts.write_buf.is_empty(), "framed write buffer not empty");
         local_conn.write_all(&parts.read_buf).await?; // mostly of the cases, this will be empty
-        proxy(local_conn, parts.io).await?;
+        tokio::io::copy_bidirectional(&mut local_conn, &mut parts.io).await?;
         Ok(())
     }
 }

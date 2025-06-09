@@ -125,3 +125,40 @@ fn empty_port_range() {
     let max_port = 3000;
     let _ = Server::new(min_port..=max_port, None);
 }
+
+#[tokio::test]
+async fn half_closed_tcp_stream() -> Result<()> {
+    // Check that "half-closed" TCP streams will not result in spontaneous hangups.
+    let _guard = SERIAL_GUARD.lock().await;
+
+    spawn_server(None).await;
+    let (listener, addr) = spawn_client(None).await?;
+
+    let (mut cli, (mut srv, _)) = tokio::try_join!(TcpStream::connect(addr), listener.accept())?;
+
+    // Send data before half-closing one of the streams.
+    let mut buf = b"message before shutdown".to_vec();
+    cli.write_all(&buf).await?;
+
+    // Only close the write half of the stream. This is a half-closed stream. In the
+    // TCP protocol, it is represented as a FIN packet on one end. The entire stream
+    // is only closed after two FINs are exchanged and ACKed by the other end.
+    cli.shutdown().await?;
+
+    srv.read_exact(&mut buf).await?;
+    assert_eq!(buf, b"message before shutdown");
+    assert_eq!(srv.read(&mut buf).await?, 0); // EOF
+
+    // Now make sure that the other stream can still send data, despite
+    // half-shutdown on client->server side.
+    let mut buf = b"hello from the other side!".to_vec();
+    srv.write_all(&buf).await?;
+    cli.read_exact(&mut buf).await?;
+    assert_eq!(buf, b"hello from the other side!");
+
+    // We don't have to think about CLOSE_RD handling because that's not really
+    // part of the TCP protocol, just the POSIX streams API. It is implemented by
+    // the OS ignoring future packets received on that stream.
+
+    Ok(())
+}
