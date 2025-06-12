@@ -1,0 +1,11 @@
+name: bore
+services:
+  bore:
+    image: ekzhang/bore
+    restart: always
+    container_name: bore
+    init: true
+    network_mode: "host"
+    command: local xxxx --to bore.pub --port xxxx
+    stdin_open: true
+    tty: true
