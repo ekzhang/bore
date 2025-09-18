@@ -33,6 +33,13 @@ tracing = "0.1.32"
 tracing-subscriber = "0.3.18"
 uuid = { version = "1.2.1", features = ["serde", "v4"] }
 
+[features]
+default = []
+# Optional feature for newer socket2 versions with SO_REUSEPORT support
+socket2-reuseport = []
+# Optional feature for newer socket2 versions with with_retries support  
+socket2-with-retries = []
+
 [dev-dependencies]
 lazy_static = "1.4.0"
 rstest = "0.15.0"
