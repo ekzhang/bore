@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use anyhow::Result;
-use bore_cli::{client::Client, server::Server};
+use bore_cli::{client::Client, config::ClientConfig, enhanced_client::EnhancedClient, health::init_health_monitoring, server::Server};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -34,6 +34,26 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// Use enhanced client with adaptive reconnection and health monitoring.
+        #[clap(long)]
+        enhanced: bool,
+
+        /// Client profile: default, mobile, low-latency, or bandwidth-constrained.
+        #[clap(long, default_value = "default")]
+        profile: String,
+
+        /// Disable automatic reconnection.
+        #[clap(long)]
+        no_reconnect: bool,
+
+        /// Disable TCP keep-alive.
+        #[clap(long)]
+        no_keepalive: bool,
+
+        /// Health report interval in seconds (0 to disable).
+        #[clap(long, default_value_t = 60)]
+        health_interval: u64,
     },
 
     /// Runs the remote proxy server.
@@ -69,9 +89,41 @@ async fn run(command: Command) -> Result<()> {
             to,
             port,
             secret,
+            enhanced,
+            profile,
+            no_reconnect,
+            no_keepalive,
+            health_interval,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
-            client.listen().await?;
+            // Initialize health monitoring if requested
+            if health_interval > 0 {
+                init_health_monitoring(std::time::Duration::from_secs(health_interval));
+            }
+
+            if enhanced {
+                // Create client configuration based on profile
+                let mut config = match profile.as_str() {
+                    "mobile" => ClientConfig::mobile_optimized(),
+                    "low-latency" => ClientConfig::low_latency(),
+                    "bandwidth-constrained" => ClientConfig::bandwidth_constrained(),
+                    _ => ClientConfig::default(),
+                };
+
+                // Apply CLI overrides
+                if no_reconnect {
+                    config.enable_reconnection = false;
+                }
+                if no_keepalive {
+                    config.enable_keepalive = false;
+                }
+
+                let client = EnhancedClient::new(&local_host, local_port, &to, port, secret.as_deref(), config).await?;
+                client.listen().await?;
+            } else {
+                // Use original client for backward compatibility
+                let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+                client.listen().await?;
+            }
         }
         Command::Server {
             min_port,

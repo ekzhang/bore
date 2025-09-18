@@ -16,6 +16,11 @@
 #![warn(missing_docs)]
 
 pub mod auth;
+pub mod backoff;
 pub mod client;
+pub mod config;
+pub mod enhanced_client;
+pub mod health;
 pub mod server;
 pub mod shared;
+pub mod socket_util;

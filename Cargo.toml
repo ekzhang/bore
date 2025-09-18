@@ -26,6 +26,7 @@ hmac = "0.12.1"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 sha2 = "0.10.2"
+socket2 = "0.5.7"
 tokio = { version = "1.17.0", features = ["rt-multi-thread", "io-util", "macros", "net", "time"] }
 tokio-util = { version = "0.7.1", features = ["codec"] }
 tracing = "0.1.32"

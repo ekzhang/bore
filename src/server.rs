@@ -1,6 +1,6 @@
 //! Server implementation for the `bore` service.
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::{io, ops::RangeInclusive, sync::Arc, time::Duration};
 
 use anyhow::Result;
@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::auth::Authenticator;
 use crate::shared::{ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
+use crate::socket_util::{configure_tcp_stream, create_configured_listener};
 
 /// State structure for the server.
 pub struct Server {
@@ -58,11 +59,17 @@ impl Server {
     /// Start the server, listening for new connections.
     pub async fn listen(self) -> Result<()> {
         let this = Arc::new(self);
-        let listener = TcpListener::bind((this.bind_addr, CONTROL_PORT)).await?;
+        let addr = SocketAddr::new(this.bind_addr, CONTROL_PORT);
+        let listener = create_configured_listener(addr).await?;
         info!(addr = ?this.bind_addr, "server listening");
 
         loop {
             let (stream, addr) = listener.accept().await?;
+            // Configure the accepted stream with keep-alive
+            if let Err(err) = configure_tcp_stream(&stream) {
+                warn!("failed to configure TCP stream: {}", err);
+            }
+            
             let this = Arc::clone(&this);
             tokio::spawn(
                 async move {
@@ -80,12 +87,18 @@ impl Server {
 
     async fn create_listener(&self, port: u16) -> Result<TcpListener, &'static str> {
         let try_bind = |port: u16| async move {
-            TcpListener::bind((self.bind_tunnels, port))
+            let addr = SocketAddr::new(self.bind_tunnels, port);
+            create_configured_listener(addr)
                 .await
-                .map_err(|err| match err.kind() {
-                    io::ErrorKind::AddrInUse => "port already in use",
-                    io::ErrorKind::PermissionDenied => "permission denied",
-                    _ => "failed to bind to port",
+                .map_err(|err| {
+                    match err.downcast_ref::<io::Error>() {
+                        Some(io_err) => match io_err.kind() {
+                            io::ErrorKind::AddrInUse => "port already in use",
+                            io::ErrorKind::PermissionDenied => "permission denied",
+                            _ => "failed to bind to port",
+                        },
+                        None => "failed to bind to port",
+                    }
                 })
         };
         if port > 0 {
@@ -152,6 +165,11 @@ impl Server {
                     if let Ok(result) = timeout(TIMEOUT, listener.accept()).await {
                         let (stream2, addr) = result?;
                         info!(?addr, ?port, "new connection");
+
+                        // Configure the tunnel connection with keep-alive
+                        if let Err(err) = configure_tcp_stream(&stream2) {
+                            warn!("failed to configure tunnel TCP stream: {}", err);
+                        }
 
                         let id = Uuid::new_v4();
                         let conns = Arc::clone(&self.conns);
