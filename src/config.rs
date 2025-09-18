@@ -35,6 +35,9 @@ pub struct ClientConfig {
     
     /// Network timeout in seconds (default: 3)
     pub network_timeout_secs: u64,
+    
+    /// Enable PROXY protocol to preserve original client IP (default: false)
+    pub enable_proxy_protocol: bool,
 }
 
 impl Default for ClientConfig {
@@ -50,6 +53,7 @@ impl Default for ClientConfig {
             enable_socket_reuse: true,
             health_check_interval: 60,
             network_timeout_secs: 3,
+            enable_proxy_protocol: false,
         }
     }
 }
@@ -68,6 +72,7 @@ impl ClientConfig {
             enable_socket_reuse: true,
             health_check_interval: 300, // Less frequent health checks
             network_timeout_secs: 5,    // Longer timeout for slow networks
+            enable_proxy_protocol: false,
         }
     }
     
@@ -84,6 +89,7 @@ impl ClientConfig {
             enable_socket_reuse: true,
             health_check_interval: 30,
             network_timeout_secs: 1,   // Shorter timeout
+            enable_proxy_protocol: false,
         }
     }
     
@@ -100,6 +106,7 @@ impl ClientConfig {
             enable_socket_reuse: true,
             health_check_interval: 600,
             network_timeout_secs: 10,
+            enable_proxy_protocol: false,
         }
     }
     

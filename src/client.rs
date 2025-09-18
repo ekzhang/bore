@@ -14,9 +14,6 @@ use crate::socket_util::create_configured_connection;
 
 /// State structure for the client.
 pub struct Client {
-    /// Control connection to the server.
-    conn: Option<Delimited<TcpStream>>,
-
     /// Destination address of the server.
     to: String,
 
@@ -62,7 +59,6 @@ impl Client {
         info!("listening at {to}:{remote_port}");
 
         Ok(Client {
-            conn: Some(stream),
             to: to.to_string(),
             local_host: local_host.to_string(),
             local_port,
@@ -138,7 +134,20 @@ impl Client {
                     tokio::spawn(
                         async move {
                             info!("new connection");
-                            match this.handle_connection(id).await {
+                            match this.handle_connection(id, None).await {
+                                Ok(_) => info!("connection exited"),
+                                Err(err) => warn!(%err, "connection exited with error"),
+                            }
+                        }
+                        .instrument(info_span!("proxy", %id)),
+                    );
+                }
+                Some(ServerMessage::ConnectionWithAddr { id, client_addr, server_addr }) => {
+                    let this = Arc::clone(self);
+                    tokio::spawn(
+                        async move {
+                            info!("new connection with address info");
+                            match this.handle_connection(id, Some((client_addr, server_addr))).await {
                                 Ok(_) => info!("connection exited"),
                                 Err(err) => warn!(%err, "connection exited with error"),
                             }
@@ -158,7 +167,7 @@ impl Client {
         }
     }
 
-    async fn handle_connection(&self, id: Uuid) -> Result<()> {
+    async fn handle_connection(&self, id: Uuid, addr_info: Option<(std::net::SocketAddr, std::net::SocketAddr)>) -> Result<()> {
         let mut remote_conn =
             Delimited::new(connect_with_retry(&self.to[..], CONTROL_PORT, 3).await?);
         if let Some(auth) = &self.auth {
@@ -168,6 +177,15 @@ impl Client {
         let mut local_conn = connect_with_timeout(&self.local_host, self.local_port).await?;
         let mut parts = remote_conn.into_parts();
         debug_assert!(parts.write_buf.is_empty(), "framed write buffer not empty");
+        
+        // Inject PROXY protocol header if address info is provided
+        if let Some((client_addr, server_addr)) = addr_info {
+            use crate::proxy_protocol::create_proxy_header;
+            let proxy_header = create_proxy_header(client_addr, server_addr);
+            local_conn.write_all(&proxy_header).await?;
+            info!("Injected PROXY header: {} -> {}", client_addr, server_addr);
+        }
+        
         local_conn.write_all(&parts.read_buf).await?; // mostly of the cases, this will be empty
         tokio::io::copy_bidirectional(&mut local_conn, &mut parts.io).await?;
         Ok(())

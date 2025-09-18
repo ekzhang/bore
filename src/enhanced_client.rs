@@ -241,7 +241,23 @@ impl EnhancedClient {
                     tokio::spawn(
                         async move {
                             debug!("New connection: {}", id);
-                            match this.handle_connection(id).await {
+                            match this.handle_connection(id, None).await {
+                                Ok(bytes) => {
+                                    info!("Connection {} completed, {} bytes transferred", id, bytes);
+                                    get_health_monitor().add_bytes_transferred(bytes);
+                                }
+                                Err(err) => warn!("Connection {} failed: {}", id, err),
+                            }
+                        }
+                        .instrument(info_span!("proxy", %id)),
+                    );
+                }
+                Ok(Ok(Some(ServerMessage::ConnectionWithAddr { id, client_addr, server_addr }))) => {
+                    let this = Arc::clone(self);
+                    tokio::spawn(
+                        async move {
+                            debug!("New connection with address info: {} ({} -> {})", id, client_addr, server_addr);
+                            match this.handle_connection(id, Some((client_addr, server_addr))).await {
                                 Ok(bytes) => {
                                     info!("Connection {} completed, {} bytes transferred", id, bytes);
                                     get_health_monitor().add_bytes_transferred(bytes);
@@ -273,7 +289,7 @@ impl EnhancedClient {
     }
     
     /// Handle individual tunnel connection with byte counting
-    async fn handle_connection(&self, id: Uuid) -> Result<u64> {
+    async fn handle_connection(&self, id: Uuid, addr_info: Option<(std::net::SocketAddr, std::net::SocketAddr)>) -> Result<u64> {
         let mut remote_conn = Delimited::new(
             self.connect_with_timeout_and_config(&self.to, CONTROL_PORT).await?
         );
@@ -287,6 +303,17 @@ impl EnhancedClient {
         
         let mut parts = remote_conn.into_parts();
         debug_assert!(parts.write_buf.is_empty(), "framed write buffer not empty");
+        
+        // Inject PROXY protocol header if address info is provided and config enables it
+        if let Some((client_addr, server_addr)) = addr_info {
+            if self.config.enable_proxy_protocol {
+                use crate::proxy_protocol::create_proxy_header;
+                let proxy_header = create_proxy_header(client_addr, server_addr);
+                local_conn.write_all(&proxy_header).await?;
+                info!("Injected PROXY header: {} -> {}", client_addr, server_addr);
+            }
+        }
+        
         local_conn.write_all(&parts.read_buf).await?;
         
         // Copy data bidirectionally and count bytes

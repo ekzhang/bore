@@ -25,6 +25,12 @@ pub struct Server {
 
     /// Concurrent map of IDs to incoming connections.
     conns: Arc<DashMap<Uuid, TcpStream>>,
+    
+    /// Concurrent map of IDs to client addresses (for PROXY protocol).
+    client_addrs: Arc<DashMap<Uuid, (SocketAddr, SocketAddr)>>,
+    
+    /// Enable PROXY protocol support.
+    enable_proxy_protocol: bool,
 
     /// IP address where the control server will bind to.
     bind_addr: IpAddr,
@@ -40,7 +46,9 @@ impl Server {
         Server {
             port_range,
             conns: Arc::new(DashMap::new()),
+            client_addrs: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
+            enable_proxy_protocol: false,
             bind_addr: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             bind_tunnels: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         }
@@ -54,6 +62,11 @@ impl Server {
     /// Set the IP address where the control server will bind to.
     pub fn set_bind_tunnels(&mut self, bind_tunnels: IpAddr) {
         self.bind_tunnels = bind_tunnels;
+    }
+    
+    /// Enable or disable PROXY protocol support.
+    pub fn set_proxy_protocol(&mut self, enable: bool) {
+        self.enable_proxy_protocol = enable;
     }
 
     /// Start the server, listening for new connections.
@@ -163,8 +176,8 @@ impl Server {
                     }
                     const TIMEOUT: Duration = Duration::from_millis(500);
                     if let Ok(result) = timeout(TIMEOUT, listener.accept()).await {
-                        let (stream2, addr) = result?;
-                        info!(?addr, ?port, "new connection");
+                        let (stream2, client_addr) = result?;
+                        info!(?client_addr, ?port, "new connection");
 
                         // Configure the tunnel connection with keep-alive
                         if let Err(err) = configure_tcp_stream(&stream2) {
@@ -173,16 +186,37 @@ impl Server {
 
                         let id = Uuid::new_v4();
                         let conns = Arc::clone(&self.conns);
+                        let client_addrs = Arc::clone(&self.client_addrs);
+                        let enable_proxy = self.enable_proxy_protocol;
 
                         conns.insert(id, stream2);
+                        
+                        if enable_proxy {
+                            // Store client and server addresses for PROXY protocol
+                            let server_addr = SocketAddr::new(host, port);
+                            client_addrs.insert(id, (client_addr, server_addr));
+                            
+                            // Send connection info with addresses
+                            stream.send(ServerMessage::ConnectionWithAddr {
+                                id,
+                                client_addr,
+                                server_addr,
+                            }).await?;
+                        } else {
+                            // Send standard connection message
+                            stream.send(ServerMessage::Connection(id)).await?;
+                        }
+                        
                         tokio::spawn(async move {
                             // Remove stale entries to avoid memory leaks.
                             sleep(Duration::from_secs(10)).await;
                             if conns.remove(&id).is_some() {
                                 warn!(%id, "removed stale connection");
                             }
+                            if enable_proxy {
+                                client_addrs.remove(&id);
+                            }
                         });
-                        stream.send(ServerMessage::Connection(id)).await?;
                     }
                 }
             }

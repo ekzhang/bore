@@ -49,18 +49,28 @@ pub struct HealthMonitor {
 }
 
 #[derive(Debug, Clone)]
+/// Connection event for health monitoring
 pub struct ConnectionEvent {
+    /// When the event occurred
     pub timestamp: Instant,
+    /// Type of connection event
     pub event_type: EventType,
+    /// Optional latency measurement
     pub latency: Option<Duration>,
 }
 
+/// Types of connection events tracked by health monitor
 #[derive(Debug, Clone, Copy)]
 pub enum EventType {
+    /// A connection attempt was initiated
     ConnectionAttempt,
+    /// A connection was successfully established
     ConnectionSuccess,
+    /// A connection attempt failed
     ConnectionFailure,
+    /// An existing connection was lost
     ConnectionLost,
+    /// A reconnection occurred
     Reconnection,
 }
 

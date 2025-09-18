@@ -1,5 +1,6 @@
 //! Shared data structures, utilities, and protocol definitions.
 
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -47,6 +48,17 @@ pub enum ServerMessage {
 
     /// Asks the client to accept a forwarded TCP connection.
     Connection(Uuid),
+    
+    /// Asks the client to accept a forwarded TCP connection with original client address.
+    /// Used when IP preservation is enabled.
+    ConnectionWithAddr { 
+        /// Connection identifier
+        id: Uuid, 
+        /// Original client address
+        client_addr: SocketAddr, 
+        /// Server address
+        server_addr: SocketAddr 
+    },
 
     /// Indicates a server error that terminates the connection.
     Error(String),

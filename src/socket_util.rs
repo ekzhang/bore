@@ -3,7 +3,6 @@
 use anyhow::Result;
 use socket2::{Domain, Protocol, Socket, Type};
 use std::net::{SocketAddr, TcpListener};
-use std::time::Duration;
 use tokio::net::{TcpListener as TokioTcpListener, TcpStream as TokioTcpStream};
 
 use crate::config::ClientConfig;

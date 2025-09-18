@@ -54,6 +54,11 @@ enum Command {
         /// Health report interval in seconds (0 to disable).
         #[clap(long, default_value_t = 60)]
         health_interval: u64,
+
+        /// Enable PROXY protocol to preserve original client IP addresses.
+        /// Requires target service to support PROXY protocol (e.g., NGINX with proxy_protocol).
+        #[clap(long)]
+        proxy_protocol: bool,
     },
 
     /// Runs the remote proxy server.
@@ -77,6 +82,11 @@ enum Command {
         /// IP address where tunnels will listen on, defaults to --bind-addr.
         #[clap(long)]
         bind_tunnels: Option<IpAddr>,
+
+        /// Enable PROXY protocol support on the server side.
+        /// This allows clients to send original IP address information.
+        #[clap(long)]
+        proxy_protocol: bool,
     },
 }
 
@@ -94,6 +104,7 @@ async fn run(command: Command) -> Result<()> {
             no_reconnect,
             no_keepalive,
             health_interval,
+            proxy_protocol,
         } => {
             // Initialize health monitoring if requested
             if health_interval > 0 {
@@ -116,6 +127,9 @@ async fn run(command: Command) -> Result<()> {
                 if no_keepalive {
                     config.enable_keepalive = false;
                 }
+                if proxy_protocol {
+                    config.enable_proxy_protocol = true;
+                }
 
                 let client = EnhancedClient::new(&local_host, local_port, &to, port, secret.as_deref(), config).await?;
                 client.listen().await?;
@@ -131,6 +145,7 @@ async fn run(command: Command) -> Result<()> {
             secret,
             bind_addr,
             bind_tunnels,
+            proxy_protocol,
         } => {
             let port_range = min_port..=max_port;
             if port_range.is_empty() {
@@ -141,6 +156,7 @@ async fn run(command: Command) -> Result<()> {
             let mut server = Server::new(port_range, secret.as_deref());
             server.set_bind_addr(bind_addr);
             server.set_bind_tunnels(bind_tunnels.unwrap_or(bind_addr));
+            server.set_proxy_protocol(proxy_protocol);
             server.listen().await?;
         }
     }

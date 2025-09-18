@@ -21,6 +21,7 @@ pub mod client;
 pub mod config;
 pub mod enhanced_client;
 pub mod health;
+pub mod proxy_protocol;
 pub mod server;
 pub mod shared;
 pub mod socket_util;
