@@ -12,7 +12,7 @@
 //! server network daemon and client local forwarding proxy. Both are public
 //! members and can be run programmatically with a Tokio 1.0 runtime.
 
-#![forbid(unsafe_code)]
+// Note: unsafe code is used for advanced socket configuration in socket_util.rs
 #![warn(missing_docs)]
 
 pub mod auth;

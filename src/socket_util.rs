@@ -33,24 +33,32 @@ pub fn configure_tcp_stream_with_config(stream: &TokioTcpStream, config: &Client
                 // Set interval for Linux
                 let ka = keepalive.with_interval(Duration::from_secs(5));
                 
-                // Workaround: For the with_retries method that may not exist
-                // We'll create a macro that tries to call it and falls back gracefully
-                macro_rules! try_with_retries {
-                    ($ka:expr, $retries:expr) => {{
-                        // This macro will attempt to call with_retries if it exists
-                        // If it doesn't exist, it will just return the original keepalive
+                // Use direct libc calls for TCP_KEEPCNT
+                // This works regardless of socket2 version
+                #[cfg(target_os = "linux")]
+                {
+                    use std::os::fd::AsRawFd;
+                    let fd = socket.as_raw_fd();
+                    let keepcnt = config.keepalive_retries as libc::c_int;
+                    
+                    unsafe {
+                        let result = libc::setsockopt(
+                            fd,
+                            libc::IPPROTO_TCP,
+                            libc::TCP_KEEPCNT,
+                            &keepcnt as *const libc::c_int as *const libc::c_void,
+                            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+                        );
                         
-                        // Method 1: Try to use with_retries (comment out if not available)
-                        // $ka.with_retries($retries)
-                        
-                        // Method 2: Fallback - just use basic keepalive
-                        // In practice, the interval and basic keepalive are most important
-                        tracing::debug!("TCP keepalive retries not configurable in this socket2 version, using defaults");
-                        $ka
-                    }};
+                        if result == 0 {
+                            tracing::debug!("Set TCP_KEEPCNT to {} via raw socket options", keepcnt);
+                        } else {
+                            tracing::debug!("Failed to set TCP_KEEPCNT, using system defaults");
+                        }
+                    }
                 }
                 
-                try_with_retries!(ka, config.keepalive_retries)
+                ka
             };
                 
             socket.set_tcp_keepalive(&keepalive)?;
@@ -82,19 +90,33 @@ pub async fn create_configured_listener_with_config(addr: SocketAddr, config: &C
         // Method 1: Try socket2's built-in method (may not exist in all versions)
         // Commented out as it may not compile: socket.set_reuse_port(true)?;
         
-        // Method 2: Use a feature-gated approach
-        #[cfg(feature = "socket2-reuseport")]
+        // Method 2: Use direct libc calls for SO_REUSEPORT
+        #[cfg(all(feature = "socket2-reuseport", target_os = "linux"))]
         {
-            if let Err(e) = socket.set_reuse_port(true) {
-                tracing::debug!("Failed to set SO_REUSEPORT: {}, continuing without it", e);
+            use std::os::fd::AsRawFd;
+            let fd = socket.as_raw_fd();
+            let optval: libc::c_int = 1;
+            
+            unsafe {
+                let result = libc::setsockopt(
+                    fd,
+                    libc::SOL_SOCKET,
+                    libc::SO_REUSEPORT,
+                    &optval as *const libc::c_int as *const libc::c_void,
+                    std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+                );
+                
+                if result == 0 {
+                    tracing::debug!("SO_REUSEPORT enabled via raw socket options");
+                } else {
+                    tracing::debug!("Failed to set SO_REUSEPORT, continuing without it");
+                }
             }
         }
         
-        #[cfg(not(feature = "socket2-reuseport"))]
+        #[cfg(not(all(feature = "socket2-reuseport", target_os = "linux")))]
         {
-            // Fallback: SO_REUSEPORT is nice-to-have but not essential
-            // The application will work fine with just SO_REUSEADDR
-            tracing::debug!("SO_REUSEPORT not available in this socket2 version, using SO_REUSEADDR only");
+            tracing::debug!("SO_REUSEPORT not enabled (feature disabled or unsupported platform)");
         }
     }
     

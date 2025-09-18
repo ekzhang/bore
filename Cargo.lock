@@ -123,6 +123,7 @@ dependencies = [
  "hex",
  "hmac",
  "lazy_static",
+ "libc",
  "rstest",
  "serde",
  "serde_json",
