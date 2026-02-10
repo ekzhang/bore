@@ -31,6 +31,10 @@ enum Command {
         #[clap(short, long, default_value_t = 0)]
         port: u16,
 
+        /// Optional if you fallback to different port if selected port is occupied
+        #[clap(long, default_value_t = false)]
+        port_fallback: bool,
+
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
@@ -68,9 +72,24 @@ async fn run(command: Command) -> Result<()> {
             local_port,
             to,
             port,
+            port_fallback,
             secret,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client =
+                match Client::new(&local_host, local_port, &to, port, secret.as_deref()).await {
+                    Ok(client) => client,
+                    Err(e) => {
+                        if e.to_string().eq("server error: port already in use")
+                            && port != 0
+                            && port_fallback
+                        {
+                            Client::new(&local_host, local_port, &to, 0, secret.as_deref()).await?
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                };
+
             client.listen().await?;
         }
         Command::Server {
