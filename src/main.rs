@@ -1,17 +1,24 @@
 use std::net::IpAddr;
 
+use std::fs::OpenOptions;
+use std::io::Write;
+
+use serde::Serialize;
+
 use anyhow::Result;
 use bore_cli::{client::Client, server::Server};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Serialize)]
 #[clap(author, version, about)]
 struct Args {
     #[clap(subcommand)]
     command: Command,
+    #[clap(long)]
+    log: bool,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Serialize)]
 enum Command {
     /// Starts a local proxy to the remote server.
     Local {
@@ -98,5 +105,22 @@ async fn run(command: Command) -> Result<()> {
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    run(Args::parse().command)
+
+    let args = Args::parse();
+
+    if args.log {
+        use serde_json::to_string_pretty;
+
+        let json = to_string_pretty(&args.command).expect("failed to serialize command to JSON");
+
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("log.json")
+            .expect("could not create/open log file");
+
+        writeln!(file, "{}", json).expect("could not write to log file");
+    }
+
+    run(args.command)
 }
