@@ -3,12 +3,15 @@ use std::net::IpAddr;
 use anyhow::Result;
 use bore_cli::{client::Client, server::Server};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
+use tracing;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
     #[clap(subcommand)]
     command: Command,
+    #[arg(long)]
+    log_path: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -96,7 +99,33 @@ async fn run(command: Command) -> Result<()> {
     Ok(())
 }
 
+fn setup_logging(log_path: Option<&String>) -> Result<tracing_appender::non_blocking::WorkerGuard> {
+    match log_path {
+        Some(x) => {
+            let file_appender = tracing_appender::rolling::daily(x, "bore_server.log");
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+            let subscriber = tracing_subscriber::fmt()
+                .with_writer(non_blocking)
+                .with_ansi(false)
+                .finish();
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("setting up trace logging failed");
+            Ok(guard)
+        }
+        None => {
+            let (non_blocking, guard) = tracing_appender::non_blocking(std::io::stdout());
+            let subscriber = tracing_subscriber::fmt()
+                .with_writer(non_blocking)
+                .finish();
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("setting up trace logging failed");
+            Ok(guard)
+        }
+    }
+}
+
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    // _ to persist the global logger guard
+    let _guard = setup_logging(Args::parse().log_path.as_ref());
     run(Args::parse().command)
 }
