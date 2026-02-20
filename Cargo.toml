@@ -26,7 +26,8 @@ hmac = "0.12.1"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 sha2 = "0.10.2"
-tokio = { version = "1.17.0", features = ["rt-multi-thread", "io-util", "macros", "net", "time"] }
+socket2 = { version = "0.5", features = ["all"] }
+tokio = { version = "1.21.0", features = ["rt-multi-thread", "io-util", "macros", "net", "time"] }
 tokio-util = { version = "0.7.1", features = ["codec"] }
 tracing = "0.1.32"
 tracing-subscriber = "0.3.18"
@@ -35,4 +36,4 @@ uuid = { version = "1.2.1", features = ["serde", "v4"] }
 [dev-dependencies]
 lazy_static = "1.4.0"
 rstest = "0.15.0"
-tokio = { version = "1.17.0", features = ["sync"] }
+tokio = { version = "1.21.0", features = ["sync"] }

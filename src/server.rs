@@ -12,7 +12,7 @@ use tracing::{info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
+use crate::shared::{set_tcp_keepalive, ClientMessage, Delimited, ServerMessage, CONTROL_PORT};
 
 /// State structure for the server.
 pub struct Server {
@@ -116,6 +116,9 @@ impl Server {
     }
 
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
+        if let Err(e) = set_tcp_keepalive(&stream) {
+            warn!("TCP keepalive not available: {e:#}");
+        }
         let mut stream = Delimited::new(stream);
         if let Some(auth) = &self.auth {
             if let Err(err) = auth.server_handshake(&mut stream).await {

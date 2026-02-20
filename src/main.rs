@@ -1,8 +1,11 @@
 use std::net::IpAddr;
+use std::time::Duration;
 
 use anyhow::Result;
+use bore_cli::shared::ExponentialBackoff;
 use bore_cli::{client::Client, server::Server};
 use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
+use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -34,6 +37,14 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// Disable automatic reconnection on connection loss.
+        #[clap(long)]
+        no_reconnect: bool,
+
+        /// Maximum delay between reconnection attempts, in seconds.
+        #[clap(long, default_value_t = 64, value_name = "SECONDS", value_parser = clap::value_parser!(u64).range(1..))]
+        max_reconnect_delay: u64,
     },
 
     /// Runs the remote proxy server.
@@ -60,6 +71,15 @@ enum Command {
     },
 }
 
+/// Check if an error is an authentication error that should not be retried.
+fn is_auth_error(err: &anyhow::Error) -> bool {
+    let msg = format!("{err:#}");
+    msg.contains("server requires authentication")
+        || msg.contains("invalid secret")
+        || msg.contains("server requires secret")
+        || msg.contains("expected authentication challenge")
+}
+
 #[tokio::main]
 async fn run(command: Command) -> Result<()> {
     match command {
@@ -69,9 +89,57 @@ async fn run(command: Command) -> Result<()> {
             to,
             port,
             secret,
+            no_reconnect,
+            max_reconnect_delay,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
-            client.listen().await?;
+            if no_reconnect {
+                // Legacy behavior: exit cleanly on disconnection, fail on auth errors
+                let client =
+                    Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+                match client.listen().await {
+                    Ok(()) => {}
+                    Err(e) if is_auth_error(&e) => return Err(e),
+                    Err(e) => {
+                        warn!("disconnected: {e:#}");
+                    }
+                }
+            } else {
+                // Reconnection mode: infinite retry on transient failures
+                let mut backoff = ExponentialBackoff::new(
+                    Duration::from_secs(1),
+                    Duration::from_secs(max_reconnect_delay),
+                );
+
+                loop {
+                    match Client::new(&local_host, local_port, &to, port, secret.as_deref()).await {
+                        Ok(client) => {
+                            backoff.reset();
+                            info!("connected to server");
+                            match client.listen().await {
+                                Ok(()) => {
+                                    warn!("listen() exited cleanly, reconnecting");
+                                }
+                                Err(e) => {
+                                    if is_auth_error(&e) {
+                                        return Err(e);
+                                    }
+                                    warn!("connection lost: {e:#}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            if is_auth_error(&e) {
+                                return Err(e);
+                            }
+                            warn!("connection failed: {e:#}");
+                        }
+                    }
+
+                    let delay = backoff.next_delay();
+                    info!("reconnecting in {delay:.1?}...");
+                    tokio::time::sleep(delay).await;
+                }
+            }
         }
         Command::Server {
             min_port,
@@ -99,4 +167,38 @@ async fn run(command: Command) -> Result<()> {
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     run(Args::parse().command)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_auth_error_detection() {
+        // Fatal auth errors — should NOT be retried
+        assert!(is_auth_error(&anyhow::anyhow!(
+            "server requires authentication, but no client secret was provided"
+        )));
+        assert!(is_auth_error(&anyhow::anyhow!(
+            "server error: invalid secret"
+        )));
+        assert!(is_auth_error(&anyhow::anyhow!(
+            "server error: server requires secret, but no secret was provided"
+        )));
+        assert!(is_auth_error(&anyhow::anyhow!(
+            "expected authentication challenge, but no secret was required"
+        )));
+
+        // Retriable errors — should be retried
+        assert!(!is_auth_error(&anyhow::anyhow!(
+            "could not connect to server:7835"
+        )));
+        assert!(!is_auth_error(&anyhow::anyhow!(
+            "heartbeat timeout, connection to server lost"
+        )));
+        assert!(!is_auth_error(&anyhow::anyhow!(
+            "server error: port already in use"
+        )));
+        assert!(!is_auth_error(&anyhow::anyhow!("server closed connection")));
+    }
 }

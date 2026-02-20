@@ -96,11 +96,13 @@ Arguments:
   <LOCAL_PORT>  The local port to expose [env: BORE_LOCAL_PORT=]
 
 Options:
-  -l, --local-host <HOST>  The local host to expose [default: localhost]
-  -t, --to <TO>            Address of the remote server to expose local ports to [env: BORE_SERVER=]
-  -p, --port <PORT>        Optional port on the remote server to select [default: 0]
-  -s, --secret <SECRET>    Optional secret for authentication [env: BORE_SECRET]
-  -h, --help               Print help
+  -l, --local-host <HOST>                The local host to expose [default: localhost]
+  -t, --to <TO>                          Address of the remote server to expose local ports to [env: BORE_SERVER=]
+  -p, --port <PORT>                      Optional port on the remote server to select [default: 0]
+  -s, --secret <SECRET>                  Optional secret for authentication [env: BORE_SECRET]
+      --no-reconnect                     Disable automatic reconnection on connection loss
+      --max-reconnect-delay <SECONDS>    Maximum delay between reconnection attempts [default: 64]
+  -h, --help                             Print help
 ```
 
 ### Self-Hosting
@@ -138,6 +140,17 @@ There is an implicit _control port_ at `7835`, used for creating new connections
 Whenever the server obtains a connection on the remote port, it generates a secure [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier) for that connection and sends it back to the client. The client then opens a separate TCP stream to the server and sends an "Accept" message containing the UUID on that stream. The server then proxies the two connections between each other.
 
 For correctness reasons and to avoid memory leaks, incoming connections are only stored by the server for up to 10 seconds before being discarded if the client does not accept them.
+
+## Reconnection
+
+By default, `bore` automatically reconnects to the server when the connection is lost (e.g., due to network interruptions). This makes it suitable for long-running deployments with service managers like systemd or launchd.
+
+- **Automatic reconnection** is enabled by default with exponential backoff (1s, 2s, 4s, ... up to 64s max)
+- **Authentication failures** (wrong secret) are never retried — the client exits immediately
+- **`--no-reconnect`** disables automatic reconnection, restoring the legacy exit-on-disconnect behavior
+- **`--max-reconnect-delay <SECONDS>`** configures the maximum backoff delay (default: 64 seconds)
+
+Dead connections are detected via a heartbeat timeout: the server sends heartbeats every 500ms, and if no message is received within 8 seconds, the client treats the connection as dead and begins reconnecting. TCP keepalive is also configured as an additional safety net.
 
 ## Authentication
 

@@ -5,7 +5,9 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use socket2::{SockRef, TcpKeepalive};
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_util::codec::{AnyDelimiterCodec, Framed, FramedParts};
 use tracing::trace;
@@ -19,6 +21,12 @@ pub const MAX_FRAME_LENGTH: usize = 256;
 
 /// Timeout for network connections and initial protocol messages.
 pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Timeout for detecting a dead control connection.
+///
+/// The server sends heartbeats every 500ms. If no message is received within
+/// this duration, the connection is considered dead.
+pub const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// A message from the client on the control connection.
 #[derive(Debug, Serialize, Deserialize)]
@@ -92,8 +100,95 @@ impl<U: AsyncRead + AsyncWrite + Unpin> Delimited<U> {
         Ok(())
     }
 
+    /// Get a reference to the underlying transport stream.
+    pub fn get_ref(&self) -> &U {
+        self.0.get_ref()
+    }
+
     /// Consume this object, returning current buffers and the inner transport.
     pub fn into_parts(self) -> FramedParts<U, AnyDelimiterCodec> {
         self.0.into_parts()
+    }
+}
+
+/// Simple exponential backoff with jitter for reconnection delays.
+pub struct ExponentialBackoff {
+    current: Duration,
+    base: Duration,
+    max: Duration,
+}
+
+impl ExponentialBackoff {
+    /// Create a new exponential backoff starting at `base` delay, capped at `max`.
+    pub fn new(base: Duration, max: Duration) -> Self {
+        Self {
+            current: base,
+            base,
+            max,
+        }
+    }
+
+    /// Get the next delay and advance the backoff state.
+    /// Includes random jitter of +/- 25% to prevent thundering herd.
+    pub fn next_delay(&mut self) -> Duration {
+        let delay = self.current;
+        self.current = (self.current * 2).min(self.max);
+        // Add jitter: multiply by random factor between 0.75 and 1.25
+        let jitter_factor = 0.75 + fastrand::f64() * 0.5;
+        delay.mul_f64(jitter_factor)
+    }
+
+    /// Reset backoff to initial delay (call after successful connection).
+    pub fn reset(&mut self) {
+        self.current = self.base;
+    }
+}
+
+/// Configure TCP keepalive on a stream for faster dead connection detection.
+///
+/// This sets the OS to start probing after 30s of idle, probe every 10s,
+/// and give up after 3 failed probes (~60s total to detect a dead connection).
+pub fn set_tcp_keepalive(stream: &TcpStream) -> Result<()> {
+    let sock_ref = SockRef::from(stream);
+    let keepalive = TcpKeepalive::new()
+        .with_time(Duration::from_secs(30))
+        .with_interval(Duration::from_secs(10))
+        .with_retries(3);
+    sock_ref
+        .set_tcp_keepalive(&keepalive)
+        .context("failed to set TCP keepalive")?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_backoff_sequence() {
+        let mut backoff = ExponentialBackoff::new(Duration::from_secs(1), Duration::from_secs(30));
+        // Delays should roughly double: 1, 2, 4, 8, 16, 30 (capped), 30, ...
+        // With jitter, each delay is between 0.75x and 1.25x the base
+        for expected_base in [1, 2, 4, 8, 16, 30, 30] {
+            let delay = backoff.next_delay();
+            let min = Duration::from_secs(expected_base).mul_f64(0.75);
+            let max = Duration::from_secs(expected_base).mul_f64(1.25);
+            assert!(
+                delay >= min && delay <= max,
+                "delay {delay:?} out of range [{min:?}, {max:?}]"
+            );
+        }
+    }
+
+    #[test]
+    fn test_backoff_reset() {
+        let mut backoff = ExponentialBackoff::new(Duration::from_secs(1), Duration::from_secs(60));
+        backoff.next_delay(); // 1s
+        backoff.next_delay(); // 2s
+        backoff.next_delay(); // 4s
+        backoff.reset();
+        let delay = backoff.next_delay();
+        // After reset, should be back to ~1s (with jitter)
+        assert!(delay < Duration::from_secs(2));
     }
 }

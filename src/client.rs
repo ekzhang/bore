@@ -8,7 +8,10 @@ use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
-use crate::shared::{ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT};
+use crate::shared::{
+    set_tcp_keepalive, ClientMessage, Delimited, ServerMessage, CONTROL_PORT, HEARTBEAT_TIMEOUT,
+    NETWORK_TIMEOUT,
+};
 
 /// State structure for the client.
 pub struct Client {
@@ -40,7 +43,11 @@ impl Client {
         port: u16,
         secret: Option<&str>,
     ) -> Result<Self> {
-        let mut stream = Delimited::new(connect_with_timeout(to, CONTROL_PORT).await?);
+        let tcp_stream = connect_with_timeout(to, CONTROL_PORT).await?;
+        if let Err(e) = set_tcp_keepalive(&tcp_stream) {
+            warn!("TCP keepalive not available: {e:#}");
+        }
+        let mut stream = Delimited::new(tcp_stream);
         let auth = secret.map(Authenticator::new);
         if let Some(auth) = &auth {
             auth.client_handshake(&mut stream).await?;
@@ -51,6 +58,7 @@ impl Client {
             Some(ServerMessage::Hello(remote_port)) => remote_port,
             Some(ServerMessage::Error(message)) => bail!("server error: {message}"),
             Some(ServerMessage::Challenge(_)) => {
+                // NOTE: This message is matched by is_auth_error() in main.rs.
                 bail!("server requires authentication, but no client secret was provided");
             }
             Some(_) => bail!("unexpected initial non-hello message"),
@@ -79,25 +87,32 @@ impl Client {
         let mut conn = self.conn.take().unwrap();
         let this = Arc::new(self);
         loop {
-            match conn.recv().await? {
-                Some(ServerMessage::Hello(_)) => warn!("unexpected hello"),
-                Some(ServerMessage::Challenge(_)) => warn!("unexpected challenge"),
-                Some(ServerMessage::Heartbeat) => (),
-                Some(ServerMessage::Connection(id)) => {
-                    let this = Arc::clone(&this);
-                    tokio::spawn(
-                        async move {
-                            info!("new connection");
-                            match this.handle_connection(id).await {
-                                Ok(_) => info!("connection exited"),
-                                Err(err) => warn!(%err, "connection exited with error"),
-                            }
-                        }
-                        .instrument(info_span!("proxy", %id)),
-                    );
+            match timeout(HEARTBEAT_TIMEOUT, conn.recv()).await {
+                Err(_elapsed) => {
+                    // No message received for HEARTBEAT_TIMEOUT seconds.
+                    // Server sends heartbeats every 500ms, so connection is dead.
+                    bail!("heartbeat timeout, connection to server lost");
                 }
-                Some(ServerMessage::Error(err)) => error!(%err, "server error"),
-                None => return Ok(()),
+                Ok(msg) => match msg? {
+                    Some(ServerMessage::Hello(_)) => warn!("unexpected hello"),
+                    Some(ServerMessage::Challenge(_)) => warn!("unexpected challenge"),
+                    Some(ServerMessage::Heartbeat) => (),
+                    Some(ServerMessage::Connection(id)) => {
+                        let this = Arc::clone(&this);
+                        tokio::spawn(
+                            async move {
+                                info!("new connection");
+                                match this.handle_connection(id).await {
+                                    Ok(_) => info!("connection exited"),
+                                    Err(err) => warn!(%err, "connection exited with error"),
+                                }
+                            }
+                            .instrument(info_span!("proxy", %id)),
+                        );
+                    }
+                    Some(ServerMessage::Error(err)) => error!(%err, "server error"),
+                    None => bail!("server closed connection"),
+                },
             }
         }
     }

@@ -48,6 +48,9 @@ impl Authenticator {
     }
 
     /// As the server, send a challenge to the client and validate their response.
+    ///
+    /// NOTE: Error messages here are matched by `is_auth_error()` in `main.rs` to
+    /// classify fatal auth errors. Do not change these strings without updating that function.
     pub async fn server_handshake<T: AsyncRead + AsyncWrite + Unpin>(
         &self,
         stream: &mut Delimited<T>,
@@ -64,6 +67,9 @@ impl Authenticator {
     }
 
     /// As the client, answer a challenge to attempt to authenticate with the server.
+    ///
+    /// NOTE: Error messages here are matched by `is_auth_error()` in `main.rs` to
+    /// classify fatal auth errors. Do not change these strings without updating that function.
     pub async fn client_handshake<T: AsyncRead + AsyncWrite + Unpin>(
         &self,
         stream: &mut Delimited<T>,
