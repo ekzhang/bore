@@ -5,6 +5,7 @@ use std::{io, ops::RangeInclusive, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use dashmap::DashMap;
+use listenfd::ListenFd;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{sleep, timeout};
@@ -58,7 +59,16 @@ impl Server {
     /// Start the server, listening for new connections.
     pub async fn listen(self) -> Result<()> {
         let this = Arc::new(self);
-        let listener = TcpListener::bind((this.bind_addr, CONTROL_PORT)).await?;
+
+        let mut listenfd = ListenFd::from_env();
+        let listener = if let Some(sd_listener) = listenfd.take_tcp_listener(0)? {
+            // Handle socket passed through socket activation mechanism
+            TcpListener::from_std(sd_listener)?
+        } else {
+            // "Normal" mode (no socket passed, bore handle its creation)
+            TcpListener::bind((this.bind_addr, CONTROL_PORT)).await?
+        };
+
         info!(addr = ?this.bind_addr, "server listening");
 
         loop {
