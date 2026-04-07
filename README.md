@@ -83,7 +83,7 @@ You can forward a port on your local machine by using the `bore local` command. 
 bore local 5000 --to bore.pub
 ```
 
-You can optionally pass in a `--port` option to pick a specific port on the remote to expose, although the command will fail if this port is not available. Also, passing `--local-host` allows you to expose a different host on your local area network besides the loopback address `localhost`.
+You can optionally pass in a `--port` option to pick a specific port on the remote to expose, although the command will fail if this port is not available. Also, passing `--local-host` allows you to expose a different host on your local area network besides the loopback address `localhost`. By default, bore renders a QR code for the public URL in the console; pass `--no-qr` to disable it.
 
 The full options are shown below.
 
@@ -99,6 +99,7 @@ Options:
   -l, --local-host <HOST>  The local host to expose [default: localhost]
   -t, --to <TO>            Address of the remote server to expose local ports to [env: BORE_SERVER=]
   -p, --port <PORT>        Optional port on the remote server to select [default: 0]
+  --no-qr                  Disable QR code rendering
   -s, --secret <SECRET>    Optional secret for authentication [env: BORE_SECRET]
   -h, --help               Print help
 ```

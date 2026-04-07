@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use anyhow::Result;
 use bore_cli::{client::Client, server::Server};
-use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
+use clap::{error::ErrorKind, ArgAction, CommandFactory, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -35,8 +35,8 @@ enum Command {
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
 
-        /// Render a QR code for the public URL in the console.
-        #[clap(long, default_value_t = false)]
+        /// Disable rendering a QR code for the public URL in the console.
+        #[clap(long = "no-qr", action = ArgAction::SetFalse, default_value_t = true)]
         qr: bool,
     },
 

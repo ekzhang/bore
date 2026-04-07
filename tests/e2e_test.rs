@@ -25,7 +25,7 @@ async fn spawn_server(secret: Option<&str>) {
 async fn spawn_client(secret: Option<&str>) -> Result<(TcpListener, SocketAddr)> {
     let listener = TcpListener::bind("localhost:0").await?;
     let local_port = listener.local_addr()?.port();
-    let client = Client::new("localhost", local_port, "localhost", 0, secret).await?;
+    let client = Client::new("localhost", local_port, "localhost", 0, secret, false).await?;
     let remote_addr = ([127, 0, 0, 1], client.remote_port()).into();
     tokio::spawn(client.listen());
     Ok((listener, remote_addr))
@@ -84,7 +84,7 @@ async fn mismatched_secret(
 async fn invalid_address() -> Result<()> {
     // We don't need the serial guard for this test because it doesn't create a server.
     async fn check_address(to: &str, use_secret: bool) -> Result<()> {
-        match Client::new("localhost", 5000, to, 0, use_secret.then_some("a secret")).await {
+        match Client::new("localhost", 5000, to, 0, use_secret.then_some("a secret"), false).await {
             Ok(_) => Err(anyhow!("expected error for {to}, use_secret={use_secret}")),
             Err(_) => Ok(()),
         }
