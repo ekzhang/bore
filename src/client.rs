@@ -8,6 +8,7 @@ use tracing::{error, info, info_span, warn, Instrument};
 use uuid::Uuid;
 
 use crate::auth::Authenticator;
+use crate::qrcode;
 use crate::shared::{ClientMessage, Delimited, ServerMessage, CONTROL_PORT, NETWORK_TIMEOUT};
 
 /// State structure for the client.
@@ -39,6 +40,7 @@ impl Client {
         to: &str,
         port: u16,
         secret: Option<&str>,
+        qr: bool,
     ) -> Result<Self> {
         let mut stream = Delimited::new(connect_with_timeout(to, CONTROL_PORT).await?);
         let auth = secret.map(Authenticator::new);
@@ -58,6 +60,12 @@ impl Client {
         };
         info!(remote_port, "connected to server");
         info!("listening at {to}:{remote_port}");
+        if qr {
+            let url = format!("http://{to}:{remote_port}");
+            for line in qrcode::render(&url)? {
+                info!("{line}");
+            }
+        }
 
         Ok(Client {
             conn: Some(stream),

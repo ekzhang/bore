@@ -17,5 +17,6 @@
 
 pub mod auth;
 pub mod client;
+pub mod qrcode;
 pub mod server;
 pub mod shared;

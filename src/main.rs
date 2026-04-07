@@ -34,6 +34,10 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// Render a QR code for the public URL in the console.
+        #[clap(long, default_value_t = false)]
+        qr: bool,
     },
 
     /// Runs the remote proxy server.
@@ -69,8 +73,10 @@ async fn run(command: Command) -> Result<()> {
             to,
             port,
             secret,
+            qr,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref(), qr)
+                .await?;
             client.listen().await?;
         }
         Command::Server {
