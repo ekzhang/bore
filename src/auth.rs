@@ -1,7 +1,7 @@
 //! Auth implementation for bore client and server.
 
 use anyhow::{bail, ensure, Result};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, Mac, KeyInit};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
