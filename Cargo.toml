@@ -16,23 +16,23 @@ name = "bore"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = { version = "1.0.56", features = ["backtrace"] }
-clap = { version = "4.0.22", features = ["derive", "env"] }
-dashmap = "5.2.0"
-fastrand = "1.9.0"
-futures-util = { version = "0.3.21", features = ["sink"] }
+anyhow = { version = "1.0.102", features = ["backtrace"] }
+clap = { version = "4.6.0", features = ["derive", "env"] }
+dashmap = "6.1.0"
+fastrand = "2.4.1"
+futures-util = { version = "0.3.32", features = ["sink"] }
 hex = "0.4.3"
-hmac = "0.12.1"
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
-sha2 = "0.10.2"
-tokio = { version = "1.17.0", features = ["rt-multi-thread", "io-util", "macros", "net", "time"] }
-tokio-util = { version = "0.7.1", features = ["codec"] }
-tracing = "0.1.32"
-tracing-subscriber = "0.3.18"
-uuid = { version = "1.2.1", features = ["serde", "v4"] }
+hmac = "0.13.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+sha2 = "0.11.0"
+tokio = { version = "1.51.1", features = ["rt-multi-thread", "io-util", "macros", "net", "time"] }
+tokio-util = { version = "0.7.18", features = ["codec"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"
+uuid = { version = "1.23.0", features = ["serde", "v4"] }
 
 [dev-dependencies]
-lazy_static = "1.4.0"
-rstest = "0.15.0"
-tokio = { version = "1.17.0", features = ["sync"] }
+lazy_static = "1.5.0"
+rstest = "0.26.1"
+tokio = { version = "1.51.1", features = ["sync"] }
