@@ -9,6 +9,10 @@ use clap::{error::ErrorKind, CommandFactory, Parser, Subcommand};
 struct Args {
     #[clap(subcommand)]
     command: Command,
+
+    /// Output logs in machine-readable JSON format (instead of human-readable).
+    #[clap(long, global = true)]
+    json: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -97,6 +101,11 @@ async fn run(command: Command) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
-    run(Args::parse().command)
+    let args = Args::parse();
+    if args.json {
+        tracing_subscriber::fmt().json().init();
+    } else {
+        tracing_subscriber::fmt::init();
+    }
+    run(args.command)
 }
