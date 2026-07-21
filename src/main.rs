@@ -34,6 +34,10 @@ enum Command {
         /// Optional secret for authentication.
         #[clap(short, long, env = "BORE_SECRET", hide_env_values = true)]
         secret: Option<String>,
+
+        /// TCP port used for control connections with the server.
+        #[clap(long, default_value_t = 7835, env = "BORE_CONTROL_PORT")]
+        control_port: u16,
     },
 
     /// Runs the remote proxy server.
@@ -57,6 +61,10 @@ enum Command {
         /// IP address where tunnels will listen on, defaults to --bind-addr.
         #[clap(long)]
         bind_tunnels: Option<IpAddr>,
+
+        /// TCP port used for control connections with clients.
+        #[clap(long, default_value_t = 7835, env = "BORE_CONTROL_PORT")]
+        control_port: u16,
     },
 }
 
@@ -69,8 +77,9 @@ async fn run(command: Command) -> Result<()> {
             to,
             port,
             secret,
+            control_port,
         } => {
-            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref()).await?;
+            let client = Client::new(&local_host, local_port, &to, port, secret.as_deref(), control_port).await?;
             client.listen().await?;
         }
         Command::Server {
@@ -79,6 +88,7 @@ async fn run(command: Command) -> Result<()> {
             secret,
             bind_addr,
             bind_tunnels,
+            control_port,
         } => {
             let port_range = min_port..=max_port;
             if port_range.is_empty() {
@@ -89,6 +99,7 @@ async fn run(command: Command) -> Result<()> {
             let mut server = Server::new(port_range, secret.as_deref());
             server.set_bind_addr(bind_addr);
             server.set_bind_tunnels(bind_tunnels.unwrap_or(bind_addr));
+            server.set_control_port(control_port);
             server.listen().await?;
         }
     }
